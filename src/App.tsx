@@ -24,7 +24,25 @@ export default function App() {
   const [pendingBackburner, setPendingBackburner] = useState<Company | null>(null);
 
   useEffect(() => {
-    getCompanies().then(setCompanies).catch(console.error);
+    getCompanies().then(async (remote) => {
+      setCompanies(remote);
+      // One-time migration: if localStorage has companies and the DB is empty, migrate them
+      if (remote.length === 0) {
+        try {
+          const raw = localStorage.getItem('dealflow-companies');
+          if (raw) {
+            const local = JSON.parse(raw) as Company[];
+            if (local.length > 0) {
+              await Promise.all(local.map(c => upsertCompany(c)));
+              localStorage.removeItem('dealflow-companies');
+              setCompanies(local);
+            }
+          }
+        } catch {
+          // ignore migration errors
+        }
+      }
+    }).catch(console.error);
   }, []);
 
   const handleConfirmUser = (name: string) => {
