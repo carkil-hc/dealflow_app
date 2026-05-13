@@ -18,6 +18,7 @@ export type HistoryEventType =
   | 'created'
   | 'stage_changed'
   | 'note_added'
+  | 'note_edited'
   | 'note_deleted'
   | 'file_added'
   | 'file_removed'

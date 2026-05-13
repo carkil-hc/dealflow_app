@@ -18,6 +18,7 @@ const EVENT_CONFIG: Record<string, { icon: React.ReactNode; color: string; label
   created:       { icon: <PlusCircle className="w-3.5 h-3.5" />, color: 'text-[#005B6E]', label: () => 'Deal created' },
   stage_changed: { icon: <ArrowRightCircle className="w-3.5 h-3.5" />, color: 'text-blue-500', label: e => `Moved from ${STAGE_CONFIG[e.fromStage as Stage]?.label ?? e.fromStage} → ${STAGE_CONFIG[e.toStage as Stage]?.label ?? e.toStage}` },
   note_added:    { icon: <StickyNote className="w-3.5 h-3.5" />, color: 'text-violet-500', label: () => 'Note added' },
+  note_edited:   { icon: <StickyNote className="w-3.5 h-3.5" />, color: 'text-violet-400', label: () => 'Note edited' },
   note_deleted:  { icon: <StickyNote className="w-3.5 h-3.5" />, color: 'text-gray-400',   label: () => 'Note deleted' },
   file_added:    { icon: <FileUp className="w-3.5 h-3.5" />,     color: 'text-amber-500',  label: e => `File attached${e.detail ? `: ${e.detail}` : ''}` },
   file_removed:  { icon: <FileX className="w-3.5 h-3.5" />,     color: 'text-gray-400',   label: e => `File removed${e.detail ? `: ${e.detail}` : ''}` },
@@ -185,9 +186,14 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
     const now = new Date().toISOString();
     const added = entries.find(e => !form.noteEntries.some(n => n.id === e.id));
     const removed = form.noteEntries.find(n => !entries.some(e => e.id === n.id));
+    const edited = entries.find(e => {
+      const prev = form.noteEntries.find(n => n.id === e.id);
+      return prev && prev.text !== e.text;
+    });
     let updated = { ...form, noteEntries: entries };
     if (added) updated = addHistory(updated, { type: 'note_added', timestamp: now, user: currentUser });
     if (removed) updated = addHistory(updated, { type: 'note_deleted', timestamp: now, user: currentUser });
+    if (edited) updated = addHistory(updated, { type: 'note_edited', timestamp: now, user: currentUser });
     setForm(updated);
   };
 
