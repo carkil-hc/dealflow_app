@@ -5,7 +5,6 @@ import path from 'path';
 import 'dotenv/config';
 import { getPool } from './db.js';
 
-
 const isProd = process.env.NODE_ENV === 'production';
 
 const app = express();
