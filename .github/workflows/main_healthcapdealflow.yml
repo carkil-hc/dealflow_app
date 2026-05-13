@@ -52,4 +52,5 @@ jobs:
           app-name: 'healthcapdealflow'
           slot-name: 'Production'
           package: .
+          startup-command: 'node dist-server/index.js'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_84F03A474C774525A425A814F2AC78CD }}
