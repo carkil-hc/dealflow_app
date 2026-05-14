@@ -9,9 +9,30 @@ async function getAccessToken(): Promise<string> {
   return token.token;
 }
 
-async function buildConfig(): Promise<sql.config> {
+let pool: sql.ConnectionPool | null = null;
+let poolExpiresAt = 0;
+
+// Rebuild the pool 5 minutes before the token expires (tokens last ~1 hour)
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+export async function getPool(): Promise<sql.ConnectionPool> {
+  const now = Date.now();
+  if (pool && now < poolExpiresAt - TOKEN_REFRESH_MARGIN_MS) {
+    return pool;
+  }
+
+  // Close old pool if it exists
+  if (pool) {
+    try { await pool.close(); } catch { /* ignore */ }
+    pool = null;
+  }
+
   const token = await getAccessToken();
-  return {
+
+  // Azure AD tokens expire in 3600 seconds by default
+  poolExpiresAt = now + 55 * 60 * 1000;
+
+  const config: sql.config = {
     server: process.env.AZURE_SQL_SERVER!,
     database: process.env.AZURE_SQL_DATABASE!,
     options: {
@@ -28,14 +49,7 @@ async function buildConfig(): Promise<sql.config> {
       options: { token },
     },
   };
-}
 
-let pool: sql.ConnectionPool | null = null;
-
-export async function getPool(): Promise<sql.ConnectionPool> {
-  if (!pool) {
-    const config = await buildConfig();
-    pool = await new sql.ConnectionPool(config).connect();
-  }
+  pool = await new sql.ConnectionPool(config).connect();
   return pool;
 }
