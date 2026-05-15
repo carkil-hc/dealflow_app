@@ -115,7 +115,13 @@ app.get('/api/companies', async (_req, res) => {
 });
 
 // POST — create/update a single company (used by Power Automate)
+// Requires X-API-Key header matching the INGEST_API_KEY env var
 app.post('/api/companies', async (req, res) => {
+  const apiKey = process.env.INGEST_API_KEY;
+  if (apiKey && req.headers['x-api-key'] !== apiKey) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
   try {
     const pool = await getPool();
     await upsertOne(pool, req.body);
