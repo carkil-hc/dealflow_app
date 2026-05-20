@@ -2,8 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import sql from 'mssql';
 import path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 import 'dotenv/config';
 import { getPool } from './db.js';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -155,6 +158,66 @@ app.delete('/api/companies/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete company' });
+  }
+});
+
+// POST /api/ingest-pitch-deck — called by Power Automate with email + attachment
+// Power Automate sends one request; this endpoint calls Claude and creates the company
+app.post('/api/ingest-pitch-deck', async (req, res) => {
+  const apiKey = process.env.INGEST_API_KEY;
+  if (apiKey && req.headers['x-api-key'] !== apiKey) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  try {
+    const { subject, body, from, attachment } = req.body;
+
+    // Build message content — include PDF if attachment provided
+    const content: Anthropic.MessageParam['content'] = [];
+    if (attachment && typeof attachment === 'string' && attachment.length > 0) {
+      content.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: attachment },
+      } as Anthropic.DocumentBlockParam);
+    }
+    content.push({
+      type: 'text',
+      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}\n\nExtract company information and return ONLY a valid JSON object with these exact fields (use null for anything you cannot find):\n{"name":"Company name","description":"2-3 sentence summary","website":null,"sector":"one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country only","therapeuticArea":null,"developmentStage":null,"fundingStage":null,"askAmount":null,"valuation":null,"leadContact":null,"email":null,"phone":null}`,
+    });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content }],
+    });
+
+    const textBlock = message.content.find(c => c.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
+
+    // Extract JSON from Claude's response (strip any markdown fences)
+    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in Claude response');
+    const extracted = JSON.parse(jsonMatch[0]);
+
+    const now = new Date().toISOString();
+    const company = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      stage: 'new',
+      owner: 'Inbound',
+      noteEntries: [],
+      attachments: [],
+      history: [{ id: `${Date.now()}-h`, type: 'created', timestamp: now, user: 'Power Automate' }],
+      createdAt: now,
+      updatedAt: now,
+      ...extracted,
+    };
+
+    const pool = await getPool();
+    await upsertOne(pool, company);
+    res.json({ ok: true, company });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to process pitch deck' });
   }
 });
 

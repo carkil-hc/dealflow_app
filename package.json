@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.97.1",
     "@azure/identity": "^4.13.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
