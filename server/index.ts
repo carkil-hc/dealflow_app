@@ -13,7 +13,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToCompany(row: Record<string, any>) {
@@ -182,7 +182,7 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     }
     content.push({
       type: 'text',
-      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}\n\nExtract company information and return ONLY a valid JSON object with these exact fields (use null for anything you cannot find):\n{"name":"Company name","description":"2-3 sentence summary","website":null,"sector":"one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country only","therapeuticArea":null,"developmentStage":null,"fundingStage":null,"askAmount":null,"valuation":null,"leadContact":null,"email":null,"phone":null}`,
+      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
     });
 
     const message = await anthropic.messages.create({
@@ -200,12 +200,28 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     const extracted = JSON.parse(jsonMatch[0]);
 
     const now = new Date().toISOString();
+
+    // Build attachments array — include the original pitch deck PDF if one was provided
+    const attachments: Array<{ id: string; name: string; type: string; size: number; uploadedAt: string; data?: string }> = [];
+    if (attachment && typeof attachment === 'string' && attachment.length > 0) {
+      const pdfBytes = Buffer.from(attachment, 'base64');
+      const fileName = (subject && subject.trim()) ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf';
+      attachments.push({
+        id: `${Date.now()}-att`,
+        name: fileName,
+        type: 'application/pdf',
+        size: pdfBytes.length,
+        uploadedAt: now,
+        data: attachment,   // store base64 so the browser can download it directly
+      });
+    }
+
     const company = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       stage: 'new',
       owner: 'Inbound',
       noteEntries: [],
-      attachments: [],
+      attachments,
       history: [{ id: `${Date.now()}-h`, type: 'created', timestamp: now, user: 'Power Automate' }],
       createdAt: now,
       updatedAt: now,

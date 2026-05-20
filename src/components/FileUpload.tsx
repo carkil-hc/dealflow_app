@@ -32,9 +32,25 @@ export default function FileUpload({ attachments, onChange }: Props) {
     setUploading(false);
   };
 
-  const handleRemove = async (id: string) => {
-    await deleteFile(id);
+  const handleRemove = async (id: string, hasInlineData?: boolean) => {
+    if (!hasInlineData) await deleteFile(id);
     onChange(attachments.filter(a => a.id !== id));
+  };
+
+  const handleDownload = (att: Attachment) => {
+    if (att.data) {
+      // Server-ingested attachment: reconstruct from inline base64
+      const byteChars = atob(att.data);
+      const byteNums = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteNums], { type: att.type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = att.name; a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      downloadFile(att.id, att.name);
+    }
   };
 
   return (
@@ -65,11 +81,11 @@ export default function FileUpload({ attachments, onChange }: Props) {
                 <div className="text-sm font-medium text-[#1A1A1A] truncate">{att.name}</div>
                 <div className="text-[11px] text-gray-400">{formatFileSize(att.size)} · {formatDate(att.uploadedAt)}</div>
               </div>
-              <button type="button" onClick={() => downloadFile(att.id, att.name)}
+              <button type="button" onClick={() => handleDownload(att)}
                 className="p-1.5 text-gray-400 hover:text-[#005B6E] transition-colors" title="Download">
                 <Download className="w-4 h-4" />
               </button>
-              <button type="button" onClick={() => handleRemove(att.id)}
+              <button type="button" onClick={() => handleRemove(att.id, !!att.data)}
                 className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
                 <X className="w-4 h-4" />
               </button>

@@ -41,6 +41,8 @@ export interface Attachment {
   type: string;
   size: number;
   uploadedAt: string;
+  /** Base64-encoded file data — present for server-ingested attachments (e.g. pitch decks) */
+  data?: string;
 }
 
 export interface Company {
