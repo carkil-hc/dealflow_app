@@ -53,7 +53,7 @@ export default function KanbanView({ companies, onSelect, onStageChange }: Props
   };
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-6" style={{ minHeight: 'calc(100vh - 100px)' }}>
+    <div className="flex gap-3 overflow-x-auto pb-4" style={{ height: 'calc(100vh - 196px)' }}>
       {ACTIVE_STAGES.map((stage) => {
         const cfg = STAGE_CONFIG[stage];
         const stageCompanies = companies.filter((c) => c.stage === stage);
@@ -66,7 +66,7 @@ export default function KanbanView({ companies, onSelect, onStageChange }: Props
             onDragOver={e => handleDragOver(e, stage)}
             onDragLeave={handleDragLeave}
             onDrop={e => handleDrop(e, stage)}
-            className={`flex-none w-[272px] flex flex-col border overflow-hidden transition-colors ${
+            className={`flex-none w-[272px] h-full flex flex-col border overflow-hidden transition-colors ${
               isOver && !isDraggingFromHere
                 ? 'border-[#005B6E] bg-[#E0F0F5]/30'
                 : 'border-gray-200 bg-white'
