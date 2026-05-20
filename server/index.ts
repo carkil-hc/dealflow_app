@@ -216,10 +216,12 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
       });
     }
 
+    const straightToReject = typeof body === 'string' && /straight to reject/i.test(body);
     const company = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      stage: 'new',
+      stage: straightToReject ? 'rejected' : 'new',
       owner: 'Inbound',
+      ...(straightToReject ? { rejectedReason: 'Straight to reject', rejectedAt: now } : {}),
       noteEntries: [],
       attachments,
       history: [{ id: `${Date.now()}-h`, type: 'created', timestamp: now, user: 'Power Automate' }],
