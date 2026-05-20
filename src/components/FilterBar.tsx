@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { SlidersHorizontal, X, ChevronDown, Search, Check } from 'lucide-react';
-import { Company } from '../types';
+import { Company, STAGE_CONFIG } from '../types';
 
 export interface FilterState {
   sector: string[];
@@ -24,8 +24,7 @@ export const EMPTY_FILTERS: FilterState = {
 
 type FilterKey = keyof FilterState;
 
-export function applyFilters(companies: Company[], filters: FilterState, search = ''): Company[] {
-  const q = search.trim().toLowerCase();
+export function applyFilters(companies: Company[], filters: FilterState): Company[] {
   return companies.filter(c => {
     if (filters.sector.length && !filters.sector.includes(c.sector ?? '')) return false;
     if (filters.therapeuticArea.length && !filters.therapeuticArea.includes(c.therapeuticArea ?? '')) return false;
@@ -34,15 +33,20 @@ export function applyFilters(companies: Company[], filters: FilterState, search 
     if (filters.location.length && !filters.location.includes(c.location ?? '')) return false;
     if (filters.nextMilestone.length && !filters.nextMilestone.includes(c.nextMilestone ?? '')) return false;
     if (filters.owner.length && !filters.owner.includes(c.owner ?? '')) return false;
-    if (q) {
-      const haystack = [
-        c.name, c.description, c.location, c.sector, c.therapeuticArea,
-        c.developmentStage, c.nextMilestone, c.fundingStage, c.askAmount,
-        c.valuation, c.owner, c.leadContact, c.email, c.website,
-      ].join(' ').toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
     return true;
+  });
+}
+
+function searchCompanies(companies: Company[], q: string): Company[] {
+  const query = q.trim().toLowerCase();
+  if (!query) return [];
+  return companies.filter(c => {
+    const haystack = [
+      c.name, c.description, c.location, c.sector, c.therapeuticArea,
+      c.developmentStage, c.nextMilestone, c.fundingStage, c.askAmount,
+      c.valuation, c.owner, c.leadContact, c.email, c.website,
+    ].join(' ').toLowerCase();
+    return haystack.includes(query);
   });
 }
 
@@ -182,13 +186,35 @@ interface Props {
   companies: Company[];
   filters: FilterState;
   onChange: (f: FilterState) => void;
-  search: string;
-  onSearchChange: (s: string) => void;
+  onSelectCompany: (c: Company) => void;
 }
 
-export default function FilterBar({ companies, filters, onChange, search, onSearchChange }: Props) {
+export default function FilterBar({ companies, filters, onChange, onSelectCompany }: Props) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Close search dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const searchResults = searchCompanies(companies, search);
+
+  const handleSelectResult = (company: Company) => {
+    onSelectCompany(company);
+    setSearch('');
+    setSearchOpen(false);
+  };
 
   const activeCount = Object.values(filters).reduce((n, arr) => n + arr.length, 0);
 
@@ -231,24 +257,64 @@ export default function FilterBar({ companies, filters, onChange, search, onSear
           <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Search box */}
-        <div className="relative flex items-center">
-          <Search className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        {/* Search box with dropdown */}
+        <div ref={searchRef} className="relative flex items-center">
+          <Search className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none z-10" />
           <input
+            ref={searchInputRef}
             type="text"
             value={search}
-            onChange={e => onSearchChange(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setSearchOpen(true); }}
+            onFocus={() => { if (search) setSearchOpen(true); }}
+            onKeyDown={e => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
             placeholder="Search companies…"
-            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] outline-none bg-white w-56 transition-colors"
+            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] outline-none bg-white w-64 transition-colors"
             style={{ borderRadius: 2 }}
           />
           {search && (
             <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 text-gray-300 hover:text-gray-500 transition-colors"
+              onClick={() => { setSearch(''); setSearchOpen(false); searchInputRef.current?.focus(); }}
+              className="absolute right-2 text-gray-300 hover:text-gray-500 transition-colors z-10"
             >
               <X className="w-3.5 h-3.5" />
             </button>
+          )}
+
+          {/* Results dropdown */}
+          {searchOpen && search.trim() && (
+            <div className="absolute top-full left-0 mt-1 w-96 bg-white border border-gray-200 shadow-lg z-50 max-h-80 overflow-y-auto" style={{ borderRadius: 2 }}>
+              {searchResults.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-gray-400">No results for "{search}"</div>
+              ) : (
+                <>
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                    {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                  </div>
+                  {searchResults.map(company => (
+                    <button
+                      key={company.id}
+                      type="button"
+                      onClick={() => handleSelectResult(company)}
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#E0F0F5]/50 transition-colors text-left border-b border-gray-50 last:border-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-[#1A1A1A] truncate">{company.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {company.stage && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 ${STAGE_CONFIG[company.stage].badgeBg} ${STAGE_CONFIG[company.stage].badgeText}`} style={{ borderRadius: 2 }}>
+                              {STAGE_CONFIG[company.stage].label}
+                            </span>
+                          )}
+                          {company.sector && <span className="text-[11px] text-gray-400">{company.sector}</span>}
+                          {company.therapeuticArea && <span className="text-[11px] text-gray-400">{company.therapeuticArea}</span>}
+                          {company.location && <span className="text-[11px] text-gray-400">{company.location}</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
           )}
         </div>
 

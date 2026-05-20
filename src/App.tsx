@@ -21,7 +21,6 @@ export default function App() {
   const [showUserSetup, setShowUserSetup] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [search, setSearch] = useState('');
   const [pendingBackburner, setPendingBackburner] = useState<Company | null>(null);
 
   useEffect(() => {
@@ -114,8 +113,8 @@ export default function App() {
     persist(companies.map(c => c.id === id ? updated : c), updated);
   };
 
-  const activeCompanies = applyFilters(companies.filter(c => c.stage !== 'rejected'), filters, search);
-  const rejectedCompanies = applyFilters(companies.filter(c => c.stage === 'rejected'), filters, search);
+  const activeCompanies = applyFilters(companies.filter(c => c.stage !== 'rejected'), filters);
+  const rejectedCompanies = applyFilters(companies.filter(c => c.stage === 'rejected'), filters);
 
   const counts: Record<string, number> = {};
   for (const s of ACTIVE_STAGES) counts[s] = companies.filter(c => c.stage === s).length;
@@ -138,7 +137,7 @@ export default function App() {
         onChangeUser={() => setShowUserSetup(true)}
       />
 
-      <FilterBar companies={companies} filters={filters} onChange={setFilters} search={search} onSearchChange={setSearch} />
+      <FilterBar companies={companies} filters={filters} onChange={setFilters} onSelectCompany={setSelected} />
 
       <main className="flex-1 px-8 py-6">
         {view === 'kanban' && (
