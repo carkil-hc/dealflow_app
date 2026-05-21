@@ -161,6 +161,17 @@ app.delete('/api/companies/:id', async (req, res) => {
   }
 });
 
+// Derive a display name from a healthcap.eu sender address.
+// "carl.kilander@healthcap.eu"  →  "Carl"
+// Falls back to 'Inbound' for any other format.
+function ownerFromSender(from: string | undefined): string {
+  if (!from) return 'Inbound';
+  const match = from.match(/([a-zA-Z0-9._%+-]+)@healthcap\.eu/i);
+  if (!match) return 'Inbound';
+  const firstName = match[1].split('.')[0];
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+}
+
 // POST /api/ingest-pitch-deck — called by Power Automate with email + attachment
 // Power Automate sends one request; this endpoint calls Claude and creates the company
 app.post('/api/ingest-pitch-deck', async (req, res) => {
@@ -220,7 +231,7 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     const company = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       stage: straightToReject ? 'rejected' : 'new',
-      owner: 'Inbound',
+      owner: ownerFromSender(from),
       ...(straightToReject ? { rejectedReason: 'Straight to reject', rejectedAt: now } : {}),
       noteEntries: [],
       attachments,
