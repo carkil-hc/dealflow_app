@@ -31,6 +31,7 @@ function rowToCompany(row: Record<string, any>) {
     fundingStage: row.funding_stage ?? undefined,
     askAmount: row.ask_amount ?? undefined,
     valuation: row.valuation ?? undefined,
+    strategy: row.strategy ?? undefined,
     owner: row.owner ?? undefined,
     backburnerReminder: row.backburner_reminder ?? undefined,
     leadContact: row.lead_contact ?? undefined,
@@ -62,6 +63,7 @@ async function upsertOne(pool: sql.ConnectionPool, c: any) {
     .input('funding_stage', sql.NVarChar(100), c.fundingStage ?? null)
     .input('ask_amount', sql.NVarChar(100), c.askAmount ?? null)
     .input('valuation', sql.NVarChar(100), c.valuation ?? null)
+    .input('strategy', sql.NVarChar(50), c.strategy ?? null)
     .input('owner', sql.NVarChar(200), c.owner ?? null)
     .input('backburner_reminder', sql.NVarChar(20), c.backburnerReminder ?? null)
     .input('lead_contact', sql.NVarChar(200), c.leadContact ?? null)
@@ -82,7 +84,7 @@ async function upsertOne(pool: sql.ConnectionPool, c: any) {
         website=@website, sector=@sector, location=@location,
         therapeutic_area=@therapeutic_area, development_stage=@development_stage,
         next_milestone=@next_milestone, funding_stage=@funding_stage,
-        ask_amount=@ask_amount, valuation=@valuation, owner=@owner,
+        ask_amount=@ask_amount, valuation=@valuation, strategy=@strategy, owner=@owner,
         backburner_reminder=@backburner_reminder, lead_contact=@lead_contact,
         email=@email, phone=@phone, note_entries=@note_entries,
         attachments=@attachments, history=@history,
@@ -91,13 +93,13 @@ async function upsertOne(pool: sql.ConnectionPool, c: any) {
       WHEN NOT MATCHED THEN INSERT (
         id,name,description,stage,website,sector,location,
         therapeutic_area,development_stage,next_milestone,funding_stage,
-        ask_amount,valuation,owner,backburner_reminder,lead_contact,
+        ask_amount,valuation,strategy,owner,backburner_reminder,lead_contact,
         email,phone,note_entries,attachments,history,
         created_at,updated_at,rejected_reason,rejected_at
       ) VALUES (
         @id,@name,@description,@stage,@website,@sector,@location,
         @therapeutic_area,@development_stage,@next_milestone,@funding_stage,
-        @ask_amount,@valuation,@owner,@backburner_reminder,@lead_contact,
+        @ask_amount,@valuation,@strategy,@owner,@backburner_reminder,@lead_contact,
         @email,@phone,@note_entries,@attachments,@history,
         @created_at,@updated_at,@rejected_reason,@rejected_at
       );
@@ -257,6 +259,7 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     const company = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       stage: straightToReject ? 'rejected' : 'new',
+      strategy: 'N/a',
       owner: ownerFromSender(from),
       ...(straightToReject ? { rejectedReason: 'Straight to reject', rejectedAt: now } : {}),
       noteEntries: [],

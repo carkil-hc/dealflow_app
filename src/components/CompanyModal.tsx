@@ -5,8 +5,8 @@ import {
   PlusCircle, ArrowRightCircle, StickyNote, FileUp, FileX, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import {
-  Company, Stage, STAGE_CONFIG, ACTIVE_STAGES, PIPELINE_STAGES, NEXT_STAGE,
-  SECTORS, DEVELOPMENT_STAGES, THERAPEUTIC_AREAS, FUNDING_STAGES, NEXT_MILESTONES,
+  Company, Stage, Strategy, STAGE_CONFIG, ACTIVE_STAGES, PIPELINE_STAGES, NEXT_STAGE,
+  SECTORS, STRATEGIES, DEVELOPMENT_STAGES, THERAPEUTIC_AREAS, FUNDING_STAGES, NEXT_MILESTONES,
   NoteEntry, HistoryEntry, formatDate, formatDateTime,
 } from '../types';
 import FileUpload from './FileUpload';
@@ -337,6 +337,31 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                     <option value="">Select…</option>
                     {THERAPEUTIC_AREAS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LABEL}>Strategy</label>
+                  <div className="flex gap-2 flex-wrap pt-0.5">
+                    {STRATEGIES.map(s => (
+                      <button key={s} type="button"
+                        onClick={() => set('strategy', s as Strategy)}
+                        className={`px-3 py-1.5 text-xs font-medium border transition-colors ${
+                          (form.strategy ?? 'N/a') === s
+                            ? 'bg-[#005B6E] text-white border-[#005B6E]'
+                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
+                        }`} style={{ borderRadius: 2 }}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className={LABEL}>Owner</label>
+                  <input type="text" value={form.owner || ''}
+                    onChange={e => set('owner', e.target.value || undefined)}
+                    placeholder="e.g. Carl" className={INPUT} style={{ borderRadius: 2 }} />
                 </div>
               </div>
 

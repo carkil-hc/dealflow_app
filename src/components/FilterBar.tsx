@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { SlidersHorizontal, X, ChevronDown, Search, Check } from 'lucide-react';
-import { Company, STAGE_CONFIG } from '../types';
+import { Company, STAGE_CONFIG, STRATEGIES } from '../types';
 
 export interface FilterState {
   sector: string[];
@@ -10,6 +10,7 @@ export interface FilterState {
   location: string[];
   nextMilestone: string[];
   owner: string[];
+  strategy: string[];
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -20,6 +21,7 @@ export const EMPTY_FILTERS: FilterState = {
   location: [],
   nextMilestone: [],
   owner: [],
+  strategy: [],
 };
 
 type FilterKey = keyof FilterState;
@@ -33,6 +35,7 @@ export function applyFilters(companies: Company[], filters: FilterState): Compan
     if (filters.location.length && !filters.location.includes(c.location ?? '')) return false;
     if (filters.nextMilestone.length && !filters.nextMilestone.includes(c.nextMilestone ?? '')) return false;
     if (filters.owner.length && !filters.owner.includes(c.owner ?? '')) return false;
+    if (filters.strategy.length && !filters.strategy.includes(c.strategy ?? 'N/a')) return false;
     return true;
   });
 }
@@ -191,18 +194,19 @@ interface Props {
 
 export default function FilterBar({ companies, filters, onChange, onSelectCompany }: Props) {
   const [open, setOpen] = useState(false);
+  const [strategyOpen, setStrategyOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const strategyRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Close search dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
+      if (strategyRef.current && !strategyRef.current.contains(e.target as Node)) setStrategyOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -256,6 +260,59 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           )}
           <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
+
+        {/* Strategy filter button */}
+        <div ref={strategyRef} className="relative">
+          <button
+            onClick={() => setStrategyOpen(o => !o)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors shrink-0 ${
+              strategyOpen || filters.strategy.length > 0
+                ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
+                : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-[#1A1A1A] bg-white'
+            }`}
+            style={{ borderRadius: 2 }}
+          >
+            Strategy
+            {filters.strategy.length > 0 && (
+              <span className="bg-[#005B6E] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                {filters.strategy.length}
+              </span>
+            )}
+            <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${strategyOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {strategyOpen && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-md z-50 w-36" style={{ borderRadius: 2 }}>
+              <button
+                type="button"
+                onClick={() => onChange({ ...filters, strategy: [] })}
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-gray-50 border-b border-gray-100 ${
+                  filters.strategy.length === 0 ? 'text-[#005B6E] font-medium' : 'text-gray-500 italic'
+                }`}
+              >
+                All
+                {filters.strategy.length === 0 && <Check className="w-3.5 h-3.5" />}
+              </button>
+              {STRATEGIES.map(s => {
+                const active = filters.strategy.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onChange({
+                      ...filters,
+                      strategy: active ? filters.strategy.filter(v => v !== s) : [...filters.strategy, s],
+                    })}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-[#E0F0F5]/50 transition-colors"
+                  >
+                    {s}
+                    {active && <Check className="w-3.5 h-3.5 text-[#005B6E]" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Search box with dropdown */}
         <div ref={searchRef} className="relative flex items-center">
@@ -335,8 +392,19 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           ))
         )}
 
-        {activeCount > 0 && (
-          <button onClick={clearAll} className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1">
+        {/* Strategy chips */}
+        {filters.strategy.map(val => (
+          <span key={`strategy-${val}`} className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium" style={{ borderRadius: 2 }}>
+            <span className="text-[#005B6E]/60 mr-0.5">Strategy:</span>
+            {val}
+            <button onClick={() => onChange({ ...filters, strategy: filters.strategy.filter(v => v !== val) })} className="ml-0.5 hover:text-[#003D4D]">
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+
+        {(activeCount > 0 || filters.strategy.length > 0) && (
+          <button onClick={() => { clearAll(); onChange({ ...EMPTY_FILTERS }); }} className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1">
             Clear all
           </button>
         )}

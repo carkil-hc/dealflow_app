@@ -61,6 +61,8 @@ export interface Company {
   fundingStage?: string;
   askAmount?: string;
   valuation?: string;
+  // Strategy
+  strategy?: Strategy;
   // Ownership
   owner?: string;
   // Backburner
@@ -170,6 +172,10 @@ export const NEXT_STAGE: Partial<Record<Stage, Stage>> = {
   due_diligence: 'terms_negotiation',
   terms_negotiation: 'invested',
 };
+
+export type Strategy = 'N/a' | 'Biotech' | 'Tech' | 'Growth';
+
+export const STRATEGIES: Strategy[] = ['N/a', 'Biotech', 'Tech', 'Growth'];
 
 export const SECTORS = [
   'Pharmaceutical',
