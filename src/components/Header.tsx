@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { LayoutGrid, List, XCircle, ChevronDown, Upload, LogOut } from 'lucide-react';
+import { LayoutGrid, List, XCircle, ChevronDown, Upload, Download, LogOut } from 'lucide-react';
 
 export type View = 'kanban' | 'list' | 'rejected';
 
@@ -7,13 +7,14 @@ interface Props {
   view: View;
   setView: (v: View) => void;
   onImport: () => void;
+  onExport: () => void;
   counts: Record<string, number>;
   rejectedCount: number;
   currentUser: string;
   onChangeUser: () => void;
 }
 
-export default function Header({ view, setView, onImport, counts, rejectedCount, currentUser, onChangeUser }: Props) {
+export default function Header({ view, setView, onImport, onExport, counts, rejectedCount, currentUser, onChangeUser }: Props) {
   const totalActive = Object.values(counts).reduce((a, b) => a + b, 0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -105,6 +106,13 @@ export default function Header({ view, setView, onImport, counts, rejectedCount,
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 shadow-md w-44 z-50" style={{ borderRadius: 2 }}>
+                <button
+                  onClick={() => { setMenuOpen(false); onExport(); }}
+                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#1A1A1A] transition-colors"
+                >
+                  <Download className="w-4 h-4 text-gray-400" />
+                  Export to CSV
+                </button>
                 <button
                   onClick={() => { setMenuOpen(false); onImport(); }}
                   className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#1A1A1A] transition-colors"

@@ -102,6 +102,34 @@ export default function App() {
     imported.forEach(c => upsertCompany(c).catch(console.error));
   };
 
+  const handleExport = () => {
+    const cols = [
+      'name', 'stage', 'strategy', 'sector', 'therapeuticArea', 'developmentStage',
+      'nextMilestone', 'fundingStage', 'askAmount', 'valuation', 'owner',
+      'location', 'website', 'leadContact', 'email', 'phone', 'description',
+      'createdAt', 'updatedAt', 'rejectedReason', 'rejectedAt',
+    ] as const;
+
+    const escape = (v: unknown) => {
+      if (v == null) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+
+    const rows = [
+      cols.join(','),
+      ...companies.map(c => cols.map(k => escape(c[k as keyof typeof c])).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dealflow-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDelete = (id: string) => {
     persist(companies.filter(c => c.id !== id), undefined, id);
     setSelected(null);
@@ -143,6 +171,7 @@ export default function App() {
       <Header
         view={view}
         setView={setView}
+        onExport={handleExport}
         onImport={() => setShowImport(true)}
         counts={counts}
         rejectedCount={rejectedCompanies.length}
