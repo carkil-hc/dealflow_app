@@ -23,6 +23,20 @@ export default function App() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [pendingBackburner, setPendingBackburner] = useState<Company | null>(null);
 
+  // Auto-identify user via Easy Auth (production only).
+  // If the header is present the name is set silently — no setup screen needed.
+  useEffect(() => {
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(({ name }: { name: string | null }) => {
+        if (name) {
+          localStorage.setItem(USER_KEY, name);
+          setCurrentUser(name);
+        }
+      })
+      .catch(() => { /* local dev — fall through to manual setup */ });
+  }, []);
+
   useEffect(() => {
     getCompanies().then(async (remote) => {
       setCompanies(remote);
