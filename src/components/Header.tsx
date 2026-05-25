@@ -1,12 +1,11 @@
 import { useRef, useState, useEffect } from 'react';
-import { LayoutGrid, List, XCircle, Plus, ChevronDown, Upload, LogOut } from 'lucide-react';
+import { LayoutGrid, List, XCircle, ChevronDown, Upload, LogOut } from 'lucide-react';
 
 export type View = 'kanban' | 'list' | 'rejected';
 
 interface Props {
   view: View;
   setView: (v: View) => void;
-  onAdd: () => void;
   onImport: () => void;
   counts: Record<string, number>;
   rejectedCount: number;
@@ -14,7 +13,7 @@ interface Props {
   onChangeUser: () => void;
 }
 
-export default function Header({ view, setView, onAdd, onImport, counts, rejectedCount, currentUser, onChangeUser }: Props) {
+export default function Header({ view, setView, onImport, counts, rejectedCount, currentUser, onChangeUser }: Props) {
   const totalActive = Object.values(counts).reduce((a, b) => a + b, 0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -117,15 +116,6 @@ export default function Header({ view, setView, onAdd, onImport, counts, rejecte
             )}
           </div>
 
-          {/* Add Company */}
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white px-4 py-2 text-sm font-medium transition-colors"
-            style={{ borderRadius: 2 }}
-          >
-            <Plus className="w-4 h-4" />
-            Add Company
-          </button>
         </div>
       </div>
     </header>

@@ -143,7 +143,6 @@ export default function App() {
       <Header
         view={view}
         setView={setView}
-        onAdd={() => setSelected('new')}
         onImport={() => setShowImport(true)}
         counts={counts}
         rejectedCount={rejectedCompanies.length}
@@ -155,7 +154,7 @@ export default function App() {
 
       <main className="flex-1 px-8 py-6">
         {view === 'kanban' && (
-          <KanbanView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} />
+          <KanbanView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} onAdd={() => setSelected('new')} />
         )}
         {view === 'list' && (
           <ListView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} />

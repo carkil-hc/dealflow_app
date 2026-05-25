@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Company, ACTIVE_STAGES, STAGE_CONFIG, NEXT_STAGE, Stage } from '../types';
 import CompanyCard from './CompanyCard';
 
@@ -6,9 +7,10 @@ interface Props {
   companies: Company[];
   onSelect: (c: Company) => void;
   onStageChange: (id: string, stage: Stage) => void;
+  onAdd: () => void;
 }
 
-export default function KanbanView({ companies, onSelect, onStageChange }: Props) {
+export default function KanbanView({ companies, onSelect, onStageChange, onAdd }: Props) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<Stage | null>(null);
 
@@ -88,6 +90,17 @@ export default function KanbanView({ companies, onSelect, onStageChange }: Props
 
             {/* Cards */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2.5 scrollbar-thin bg-[#FAFAFA]">
+              {/* Add button — only in the New column */}
+              {stage === 'new' && (
+                <button
+                  onClick={onAdd}
+                  className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-300 hover:border-[#005B6E] hover:text-[#005B6E] text-gray-400 text-sm py-2.5 transition-colors bg-white"
+                  style={{ borderRadius: 2 }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Company
+                </button>
+              )}
               {stageCompanies.length === 0 ? (
                 <div className={`text-center py-10 text-xs transition-colors ${
                   isOver && !isDraggingFromHere ? 'text-[#005B6E]' : 'text-gray-300'
