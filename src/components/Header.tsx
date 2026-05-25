@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { LayoutGrid, List, XCircle, Plus, ChevronDown, Upload } from 'lucide-react';
+import { LayoutGrid, List, XCircle, Plus, ChevronDown, Upload, LogOut } from 'lucide-react';
 
 export type View = 'kanban' | 'list' | 'rejected';
 
@@ -83,6 +83,15 @@ export default function Header({ view, setView, onAdd, onImport, counts, rejecte
               {currentUser.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)}
             </span>
             <span className="font-medium">{currentUser}</span>
+          </button>
+
+          {/* Sign out */}
+          <button
+            onClick={() => { window.location.href = '/.auth/logout'; }}
+            className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
 
           {/* Actions dropdown */}
