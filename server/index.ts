@@ -106,6 +106,18 @@ async function upsertOne(pool: sql.ConnectionPool, c: any) {
     `);
 }
 
+// In production, redirect unauthenticated browser requests to Microsoft login.
+// API routes are excluded so Power Automate (and other integrations) can call them freely.
+if (isProd) {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    if (!req.headers['x-ms-client-principal']) {
+      return res.redirect('/.auth/login/aad?post_login_redirect_uri=' + encodeURIComponent(req.path));
+    }
+    next();
+  });
+}
+
 // GET /api/me — returns the logged-in user's display name and email from Easy Auth headers.
 // Returns { name: null, email: null } when running locally without Easy Auth.
 app.get('/api/me', (req, res) => {
