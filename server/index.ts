@@ -280,6 +280,51 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
   }
 });
 
+// POST /api/companies/:id/reports/competitive-landscape
+// Generates a competitive landscape analysis for the company using Claude
+app.post('/api/companies/:id/reports/competitive-landscape', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('id', sql.NVarChar(50), req.params.id)
+      .query('SELECT * FROM companies WHERE id = @id');
+    if (result.recordset.length === 0) { res.status(404).json({ error: 'Company not found' }); return; }
+    const c = rowToCompany(result.recordset[0]);
+
+    const prompt = `You are a healthcare and life science venture capital analyst. Produce a concise competitive landscape analysis for the following company.
+
+Company: ${c.name}
+Description: ${c.description || 'N/A'}
+Sector: ${c.sector || 'N/A'}
+Therapeutic Area: ${c.therapeuticArea || 'N/A'}
+Development Stage: ${c.developmentStage || 'N/A'}
+Location: ${c.location || 'N/A'}
+Website: ${c.website || 'N/A'}
+
+Write a structured analysis covering:
+1. **Market Overview** — brief description of the market/indication this company operates in
+2. **Key Competitors** — list the main competitors (public companies, late-stage biotechs, and emerging players) with a one-line description of each
+3. **Differentiation** — how this company appears to differentiate from competitors based on the information available
+4. **Competitive Risks** — the main competitive threats or risks
+5. **Overall Assessment** — a brief 2-3 sentence summary of the competitive position
+
+Be specific and factual. If information is limited, note what additional data would improve the analysis.`;
+
+    const message = await anthropic.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') throw new Error('No text response from Claude');
+    res.json({ report: textBlock.text });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
 // Serve the built React app for all non-API routes in production
 if (isProd) {
   const distPath = path.join(process.cwd(), 'dist');

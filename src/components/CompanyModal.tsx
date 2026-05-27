@@ -1,8 +1,9 @@
 ﻿import { useState, useEffect } from 'react';
 import {
   X, ArrowRight, XCircle, RotateCcw, Trash2, Save, ChevronRight,
-  Building2, Briefcase, MessageSquare, Paperclip, History,
+  Building2, Briefcase, MessageSquare, Paperclip, History, FlaskConical,
   PlusCircle, ArrowRightCircle, StickyNote, FileUp, FileX, AlertCircle, RefreshCw,
+  Play, Loader2, Copy, Check,
 } from 'lucide-react';
 import {
   Company, Stage, Strategy, STAGE_CONFIG, ACTIVE_STAGES, PIPELINE_STAGES, NEXT_STAGE,
@@ -11,6 +12,72 @@ import {
 } from '../types';
 import FileUpload from './FileUpload';
 import NoteTimeline from './NoteTimeline';
+
+// ── Agent report card ──────────────────────────────────────────────────────
+
+interface AgentReportCardProps {
+  title: string;
+  description: string;
+  companyId: string;
+  reportKey: string;
+  report: { text: string; runAt: string } | null;
+  running: boolean;
+  copied: boolean;
+  onRun: () => void;
+  onCopy: (text: string) => void;
+  onSaveAsNote: () => void;
+}
+
+function AgentReportCard({ title, description, report, running, copied, onRun, onCopy, onSaveAsNote }: AgentReportCardProps) {
+  return (
+    <div className="border border-gray-200 bg-white" style={{ borderRadius: 2 }}>
+      <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-semibold text-[#1A1A1A]">{title}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{description}</div>
+        </div>
+        <button
+          onClick={onRun}
+          disabled={running}
+          className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors"
+          style={{ borderRadius: 2 }}
+        >
+          {running
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>
+            : <><Play className="w-3 h-3" /> {report ? 'Re-run' : 'Run'}</>
+          }
+        </button>
+      </div>
+
+      {report && (
+        <div className="px-4 py-3">
+          <div className="text-[11px] text-gray-400 mb-2">
+            Generated {new Date(report.runAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </div>
+          <div className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-wrap bg-gray-50 border border-gray-100 px-3 py-3 max-h-80 overflow-y-auto" style={{ borderRadius: 2 }}>
+            {report.text}
+          </div>
+          <div className="flex items-center gap-2 mt-2.5">
+            <button
+              onClick={() => onCopy(report.text)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors"
+              style={{ borderRadius: 2 }}
+            >
+              {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+            </button>
+            <button
+              onClick={onSaveAsNote}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors"
+              style={{ borderRadius: 2 }}
+            >
+              <StickyNote className="w-3 h-3" /> Save as note
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── History log component ──────────────────────────────────────────────────
 
@@ -76,14 +143,15 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'info' | 'deal' | 'notes' | 'files' | 'history';
+type Tab = 'info' | 'deal' | 'notes' | 'files' | 'history' | 'dd_reports';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'info',    label: 'Company', icon: <Building2 className="w-3.5 h-3.5" /> },
-  { id: 'deal',    label: 'Deal',    icon: <Briefcase className="w-3.5 h-3.5" /> },
-  { id: 'notes',   label: 'Notes',   icon: <MessageSquare className="w-3.5 h-3.5" /> },
-  { id: 'files',   label: 'Files',   icon: <Paperclip className="w-3.5 h-3.5" /> },
-  { id: 'history', label: 'History', icon: <History className="w-3.5 h-3.5" /> },
+  { id: 'info',       label: 'Company',    icon: <Building2 className="w-3.5 h-3.5" /> },
+  { id: 'deal',       label: 'Deal',       icon: <Briefcase className="w-3.5 h-3.5" /> },
+  { id: 'notes',      label: 'Notes',      icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { id: 'files',      label: 'Files',      icon: <Paperclip className="w-3.5 h-3.5" /> },
+  { id: 'history',    label: 'History',    icon: <History className="w-3.5 h-3.5" /> },
+  { id: 'dd_reports', label: 'DD Reports', icon: <FlaskConical className="w-3.5 h-3.5" /> },
 ];
 
 function uid() {
@@ -125,6 +193,9 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
   const [rejectReason, setRejectReason] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [errors, setErrors] = useState<{ name?: string }>({});
+  const [ddReports, setDdReports] = useState<Record<string, { text: string; runAt: string } | null>>({});
+  const [ddRunning, setDdRunning] = useState<Record<string, boolean>>({});
+  const [ddCopied, setDdCopied] = useState<Record<string, boolean>>({});
 
   const isNew = !company;
 
@@ -526,6 +597,50 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
           {/* ── History tab ── */}
           {tab === 'history' && (
             <HistoryLog history={form.history || []} />
+          )}
+
+          {/* ── DD Reports tab ── */}
+          {tab === 'dd_reports' && (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-400">Run AI-powered due diligence analyses. Results are generated fresh each time and can be copied or saved as a note.</p>
+
+              {/* Competitive Landscape */}
+              <AgentReportCard
+                title="Competitive Landscape"
+                description="Identifies key competitors, market positioning, and differentiation based on the company's therapeutic area, sector, and technology."
+                companyId={form.id}
+                reportKey="competitive_landscape"
+                report={ddReports['competitive_landscape'] ?? null}
+                running={ddRunning['competitive_landscape'] ?? false}
+                copied={ddCopied['competitive_landscape'] ?? false}
+                onRun={async () => {
+                  setDdRunning(r => ({ ...r, competitive_landscape: true }));
+                  try {
+                    const res = await fetch(`/api/companies/${form.id}/reports/competitive-landscape`, { method: 'POST' });
+                    const data = await res.json();
+                    setDdReports(r => ({ ...r, competitive_landscape: { text: data.report, runAt: new Date().toISOString() } }));
+                  } catch { /* ignore */ } finally {
+                    setDdRunning(r => ({ ...r, competitive_landscape: false }));
+                  }
+                }}
+                onCopy={(text) => {
+                  navigator.clipboard.writeText(text);
+                  setDdCopied(r => ({ ...r, competitive_landscape: true }));
+                  setTimeout(() => setDdCopied(r => ({ ...r, competitive_landscape: false })), 2000);
+                }}
+                onSaveAsNote={() => {
+                  const r = ddReports['competitive_landscape'];
+                  if (!r) return;
+                  const note = {
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    text: `**Competitive Landscape Analysis**\n\n${r.text}`,
+                    createdAt: r.runAt,
+                    createdBy: 'Claude',
+                  };
+                  setForm(f => ({ ...f, noteEntries: [...f.noteEntries, note] }));
+                }}
+              />
+            </div>
           )}
         </div>
 
