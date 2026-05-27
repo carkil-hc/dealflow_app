@@ -61,6 +61,7 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   fundingStage: 'Funding Stage',
   location: 'Location',
   nextMilestone: 'Next Milestone',
+  strategy: 'Strategy',
 };
 
 const FILTER_KEYS: FilterKey[] = [

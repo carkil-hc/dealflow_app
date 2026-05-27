@@ -118,7 +118,7 @@ function processCSV(rows: string[][], existingNames: Set<string>): RowResult[] {
       fundingStage: '', askAmount: '', valuation: '', leadContact: '',
       email: '', phone: '', rejectedReason: '',
     };
-    row.forEach((val, i) => { if (colMap[i]) (parsed as Record<string, string>)[colMap[i]] = val.trim(); });
+    row.forEach((val, i) => { if (colMap[i]) (parsed as unknown as Record<string, string>)[colMap[i]] = val.trim(); });
     if (parsed.stage as string) parsed.stage = parseStage(parsed.stage as unknown as string);
 
     const errors: string[] = [];
@@ -188,6 +188,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
       rejectedReason: r.rejectedReason || undefined,
       noteEntries: [],
       attachments: [],
+      history: [],
       createdAt: now,
       updatedAt: now,
     }));

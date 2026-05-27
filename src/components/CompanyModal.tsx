@@ -618,7 +618,17 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   try {
                     const res = await fetch(`/api/companies/${form.id}/reports/competitive-landscape`, { method: 'POST' });
                     const data = await res.json();
-                    setDdReports(r => ({ ...r, competitive_landscape: { text: data.report, runAt: new Date().toISOString() } }));
+                    const runAt = new Date().toISOString();
+                    setDdReports(r => ({ ...r, competitive_landscape: { text: data.report, runAt } }));
+                    // Attach the generated PPTX to the Files tab
+                    if (data.attachment) {
+                      const now = runAt;
+                      let updated = { ...form, attachments: [...form.attachments, data.attachment] };
+                      updated = addHistory(updated, { type: 'file_added', timestamp: now, user: 'Claude', detail: data.attachment.name });
+                      updated = { ...updated, updatedAt: now };
+                      setForm(updated);
+                      onSave(updated);
+                    }
                   } catch { /* ignore */ } finally {
                     setDdRunning(r => ({ ...r, competitive_landscape: false }));
                   }
