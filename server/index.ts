@@ -227,7 +227,7 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     });
 
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-sonnet-4-5',   // Sonnet: same accuracy for extraction, 4-5× faster than Opus
       max_tokens: 1024,
       messages: [{ role: 'user', content }],
     });
@@ -237,7 +237,7 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
 
     // Extract JSON from Claude's response (strip any markdown fences)
     const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in Claude response');
+    if (!jsonMatch) throw new Error(`No JSON in Claude response. Raw response: ${textBlock.text.slice(0, 300)}`);
     const extracted = JSON.parse(jsonMatch[0]);
 
     const now = new Date().toISOString();
@@ -276,8 +276,9 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     await upsertOne(pool, company);
     res.json({ ok: true, company });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to process pitch deck' });
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[ingest-pitch-deck]', message);
+    res.status(500).json({ error: 'Failed to process pitch deck', detail: message });
   }
 });
 
