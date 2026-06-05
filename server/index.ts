@@ -213,35 +213,47 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
   try {
     const { subject, body, from } = req.body;
 
-    // Power Automate sends attachments as an array: [{name, contentBytes}]
-    // We scan all of them and pick the first genuine PDF.
+    // Power Automate can serialise attachment objects with either camelCase or PascalCase keys
+    // depending on the connector version. Support both.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type PaRaw = Record<string, any>;
+    const getBytes = (a: PaRaw): string => a['contentBytes'] ?? a['ContentBytes'] ?? '';
+    const getAttName = (a: PaRaw): string => a['name'] ?? a['Name'] ?? '';
+
     // PDF magic bytes: "%PDF" → base64 prefix "JVBER"
     const isPdf = (data: string) => typeof data === 'string' && data.trimStart().startsWith('JVBER');
 
-    interface PaAttachment { name?: string; contentBytes?: string; }
-    const rawAtts: PaAttachment[] = Array.isArray(req.body.attachments) ? req.body.attachments : [];
+    const rawAtts: PaRaw[] = Array.isArray(req.body.attachments) ? req.body.attachments : [];
 
-    // Also accept legacy single-attachment fields for backwards compatibility
+    // Also accept legacy single-attachment field for backwards compatibility
     if (rawAtts.length === 0 && req.body.attachment) {
-      rawAtts.push({ name: req.body.attachmentName ?? undefined, contentBytes: req.body.attachment });
+      rawAtts.push({ contentBytes: req.body.attachment, name: req.body.attachmentName ?? '' });
     }
 
-    const pdfAtt = rawAtts.find(a => isPdf(a.contentBytes ?? '')) ?? null;
-    const hasPdf = pdfAtt !== null;
+    // Log every attachment's name, first 6 bytes of content (magic), and size for diagnostics
+    rawAtts.forEach((a, i) => {
+      const bytes = getBytes(a);
+      console.log(`[ingest] att[${i}] name="${getAttName(a)}" magic="${bytes.slice(0, 6)}" len=${bytes.length}`);
+    });
 
-    console.log(`[ingest] subject="${subject}" from="${from}" totalAttachments=${rawAtts.length} pdfFound=${hasPdf}`);
+    const pdfAtt = rawAtts.find(a => isPdf(getBytes(a))) ?? null;
+    const hasPdf = pdfAtt !== null;
+    const pdfBytes = hasPdf ? getBytes(pdfAtt!) : '';
+    const pdfName = hasPdf ? getAttName(pdfAtt!) : '';
+
+    console.log(`[ingest] subject="${subject}" from="${from}" totalAtts=${rawAtts.length} pdfFound=${hasPdf} pdfName="${pdfName}"`);
 
     // Build Claude message — include the PDF document block if we found one
     const content: Anthropic.MessageParam['content'] = [];
-    if (hasPdf && pdfAtt!.contentBytes) {
+    if (hasPdf) {
       content.push({
         type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: pdfAtt!.contentBytes },
+        source: { type: 'base64', media_type: 'application/pdf', data: pdfBytes },
       } as Anthropic.DocumentBlockParam);
     }
 
     const noDocNote = !hasPdf && rawAtts.length > 0
-      ? `\nNote: ${rawAtts.length} attachment(s) were provided but none appear to be PDFs. Extract from the email text only.`
+      ? `\nNote: ${rawAtts.length} attachment(s) were provided but none are valid PDFs (magic bytes: ${rawAtts.map(a => getBytes(a).slice(0, 6)).join(', ')}). Extract from the email text only.`
       : '';
 
     content.push({
@@ -266,17 +278,17 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
 
     // Store the PDF as a file attachment (base64 inline so browser can download it)
     const attachments: Array<{ id: string; name: string; type: string; size: number; uploadedAt: string; data?: string }> = [];
-    if (hasPdf && pdfAtt!.contentBytes) {
-      const pdfBytes = Buffer.from(pdfAtt!.contentBytes, 'base64');
-      const fileName = pdfAtt!.name?.trim()
+    if (hasPdf) {
+      const buf = Buffer.from(pdfBytes, 'base64');
+      const fileName = pdfName.trim()
         || (subject?.trim() ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf');
       attachments.push({
         id: `${Date.now()}-att`,
         name: fileName,
         type: 'application/pdf',
-        size: pdfBytes.length,
+        size: buf.length,
         uploadedAt: now,
-        data: pdfAtt!.contentBytes,
+        data: pdfBytes,
       });
     }
 
@@ -297,7 +309,16 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
 
     const pool = await getPool();
     await upsertOne(pool, company);
-    res.json({ ok: true, company });
+    res.json({
+      ok: true,
+      debug: {
+        totalAttachments: rawAtts.length,
+        attachmentMagics: rawAtts.map(a => ({ name: getAttName(a), magic: getBytes(a).slice(0, 6) })),
+        pdfFound: hasPdf,
+        pdfName,
+      },
+      company,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[ingest-pitch-deck]', message);
