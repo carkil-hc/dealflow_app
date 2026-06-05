@@ -211,19 +211,31 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     return;
   }
   try {
-    const { subject, body, from, attachment } = req.body;
+    const { subject, body, from, attachment, attachmentName, attachmentType } = req.body;
 
-    // Build message content — include PDF if attachment provided
+    // Detect whether the attachment is actually a PDF.
+    // PDF files start with "%PDF" → base64 prefix "JVBER".
+    // Power Automate sometimes sends inline images (JPEG = "/9j/", PNG = "iVBOR") instead.
+    const isPdf = (data: string) => data.trimStart().startsWith('JVBER');
+
+    const hasPdf = attachment && typeof attachment === 'string' && attachment.length > 0 && isPdf(attachment);
+
+    // Build message content — include PDF only if it is actually a PDF
     const content: Anthropic.MessageParam['content'] = [];
-    if (attachment && typeof attachment === 'string' && attachment.length > 0) {
+    if (hasPdf) {
       content.push({
         type: 'document',
         source: { type: 'base64', media_type: 'application/pdf', data: attachment },
       } as Anthropic.DocumentBlockParam);
     }
+
+    const hasAttachmentNote = !hasPdf && attachment && attachment.length > 0
+      ? `\nNote: An attachment was provided but it does not appear to be a PDF (possibly an inline image). Extract as much as possible from the email subject and body alone.`
+      : '';
+
     content.push({
       type: 'text',
-      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
+      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}${hasAttachmentNote}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
     });
 
     const message = await anthropic.messages.create({
@@ -242,14 +254,16 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
 
     const now = new Date().toISOString();
 
-    // Build attachments array — include the original pitch deck PDF if one was provided
+    // Build attachments array — only store the attachment if it is actually a PDF
     const attachments: Array<{ id: string; name: string; type: string; size: number; uploadedAt: string; data?: string }> = [];
-    if (attachment && typeof attachment === 'string' && attachment.length > 0) {
+    if (hasPdf) {
       const pdfBytes = Buffer.from(attachment, 'base64');
-      const fileName = (subject && subject.trim()) ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf';
+      const rawName = attachmentName && typeof attachmentName === 'string' && attachmentName.trim()
+        ? attachmentName.trim()
+        : (subject && subject.trim()) ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf';
       attachments.push({
         id: `${Date.now()}-att`,
-        name: fileName,
+        name: rawName,
         type: 'application/pdf',
         size: pdfBytes.length,
         uploadedAt: now,
