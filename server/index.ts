@@ -211,35 +211,46 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     return;
   }
   try {
-    const { subject, body, from, attachment, attachmentName, attachmentType } = req.body;
+    const { subject, body, from } = req.body;
 
-    // Detect whether the attachment is actually a PDF.
-    // PDF files start with "%PDF" → base64 prefix "JVBER".
-    // Power Automate sometimes sends inline images (JPEG = "/9j/", PNG = "iVBOR") instead.
-    const isPdf = (data: string) => data.trimStart().startsWith('JVBER');
+    // Power Automate sends attachments as an array: [{name, contentBytes}]
+    // We scan all of them and pick the first genuine PDF.
+    // PDF magic bytes: "%PDF" → base64 prefix "JVBER"
+    const isPdf = (data: string) => typeof data === 'string' && data.trimStart().startsWith('JVBER');
 
-    const hasPdf = attachment && typeof attachment === 'string' && attachment.length > 0 && isPdf(attachment);
+    interface PaAttachment { name?: string; contentBytes?: string; }
+    const rawAtts: PaAttachment[] = Array.isArray(req.body.attachments) ? req.body.attachments : [];
 
-    // Build message content — include PDF only if it is actually a PDF
+    // Also accept legacy single-attachment fields for backwards compatibility
+    if (rawAtts.length === 0 && req.body.attachment) {
+      rawAtts.push({ name: req.body.attachmentName ?? undefined, contentBytes: req.body.attachment });
+    }
+
+    const pdfAtt = rawAtts.find(a => isPdf(a.contentBytes ?? '')) ?? null;
+    const hasPdf = pdfAtt !== null;
+
+    console.log(`[ingest] subject="${subject}" from="${from}" totalAttachments=${rawAtts.length} pdfFound=${hasPdf}`);
+
+    // Build Claude message — include the PDF document block if we found one
     const content: Anthropic.MessageParam['content'] = [];
-    if (hasPdf) {
+    if (hasPdf && pdfAtt!.contentBytes) {
       content.push({
         type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: attachment },
+        source: { type: 'base64', media_type: 'application/pdf', data: pdfAtt!.contentBytes },
       } as Anthropic.DocumentBlockParam);
     }
 
-    const hasAttachmentNote = !hasPdf && attachment && attachment.length > 0
-      ? `\nNote: An attachment was provided but it does not appear to be a PDF (possibly an inline image). Extract as much as possible from the email subject and body alone.`
+    const noDocNote = !hasPdf && rawAtts.length > 0
+      ? `\nNote: ${rawAtts.length} attachment(s) were provided but none appear to be PDFs. Extract from the email text only.`
       : '';
 
     content.push({
       type: 'text',
-      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}${hasAttachmentNote}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
+      text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}${noDocNote}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
     });
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',   // Sonnet: same accuracy for extraction, 4-5× faster than Opus
+      model: 'claude-sonnet-4-5',
       max_tokens: 1024,
       messages: [{ role: 'user', content }],
     });
@@ -247,27 +258,25 @@ app.post('/api/ingest-pitch-deck', async (req, res) => {
     const textBlock = message.content.find(c => c.type === 'text');
     if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
 
-    // Extract JSON from Claude's response (strip any markdown fences)
     const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in Claude response. Raw response: ${textBlock.text.slice(0, 300)}`);
+    if (!jsonMatch) throw new Error(`No JSON in Claude response. Raw: ${textBlock.text.slice(0, 300)}`);
     const extracted = JSON.parse(jsonMatch[0]);
 
     const now = new Date().toISOString();
 
-    // Build attachments array — only store the attachment if it is actually a PDF
+    // Store the PDF as a file attachment (base64 inline so browser can download it)
     const attachments: Array<{ id: string; name: string; type: string; size: number; uploadedAt: string; data?: string }> = [];
-    if (hasPdf) {
-      const pdfBytes = Buffer.from(attachment, 'base64');
-      const rawName = attachmentName && typeof attachmentName === 'string' && attachmentName.trim()
-        ? attachmentName.trim()
-        : (subject && subject.trim()) ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf';
+    if (hasPdf && pdfAtt!.contentBytes) {
+      const pdfBytes = Buffer.from(pdfAtt!.contentBytes, 'base64');
+      const fileName = pdfAtt!.name?.trim()
+        || (subject?.trim() ? `${subject.trim().replace(/[^a-z0-9 _-]/gi, '_')}.pdf` : 'pitch-deck.pdf');
       attachments.push({
         id: `${Date.now()}-att`,
-        name: rawName,
+        name: fileName,
         type: 'application/pdf',
         size: pdfBytes.length,
         uploadedAt: now,
-        data: attachment,   // store base64 so the browser can download it directly
+        data: pdfAtt!.contentBytes,
       });
     }
 
