@@ -3,7 +3,7 @@ import {
   X, ArrowRight, XCircle, RotateCcw, Trash2, Save, ChevronRight,
   Building2, Briefcase, MessageSquare, Paperclip, History, FlaskConical,
   PlusCircle, ArrowRightCircle, StickyNote, FileUp, FileX, AlertCircle, RefreshCw,
-  Play, Loader2, Copy, Check,
+  Play, Loader2, Copy, Check, LayoutDashboard, ClipboardCheck,
 } from 'lucide-react';
 import {
   Company, Stage, Strategy, STAGE_CONFIG, ACTIVE_STAGES, PIPELINE_STAGES, NEXT_STAGE,
@@ -143,15 +143,17 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'info' | 'deal' | 'notes' | 'files' | 'history' | 'dd_reports';
+type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'info',       label: 'Company',    icon: <Building2 className="w-3.5 h-3.5" /> },
-  { id: 'deal',       label: 'Deal',       icon: <Briefcase className="w-3.5 h-3.5" /> },
-  { id: 'notes',      label: 'Notes',      icon: <MessageSquare className="w-3.5 h-3.5" /> },
-  { id: 'files',      label: 'Files',      icon: <Paperclip className="w-3.5 h-3.5" /> },
-  { id: 'history',    label: 'History',    icon: <History className="w-3.5 h-3.5" /> },
-  { id: 'dd_reports', label: 'DD Reports', icon: <FlaskConical className="w-3.5 h-3.5" /> },
+  { id: 'overview',      label: 'Overview',       icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+  { id: 'info',          label: 'Company',        icon: <Building2 className="w-3.5 h-3.5" /> },
+  { id: 'deal',          label: 'Deal',           icon: <Briefcase className="w-3.5 h-3.5" /> },
+  { id: 'due_diligence', label: 'Due Diligence',  icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
+  { id: 'notes',         label: 'Notes',          icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { id: 'files',         label: 'Files',          icon: <Paperclip className="w-3.5 h-3.5" /> },
+  { id: 'history',       label: 'History',        icon: <History className="w-3.5 h-3.5" /> },
+  { id: 'dd_reports',    label: 'DD Reports',     icon: <FlaskConical className="w-3.5 h-3.5" /> },
 ];
 
 function uid() {
@@ -188,7 +190,7 @@ const LABEL = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide
 
 export default function CompanyModal({ company, currentUser, onSave, onDelete, onClose }: Props) {
   const [form, setForm] = useState<Company>(() => company ?? newCompany(currentUser));
-  const [tab, setTab] = useState<Tab>('info');
+  const [tab, setTab] = useState<Tab>('overview');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -201,7 +203,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
 
   useEffect(() => {
     setForm(company ?? newCompany(currentUser));
-    setTab('info');
+    setTab('overview');
     setErrors({});
   }, [company]);
 
@@ -374,6 +376,24 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6">
+
+          {/* ── Overview tab ── */}
+          {tab === 'overview' && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <LayoutDashboard className="w-8 h-8 text-gray-200 mb-2" />
+              <p className="text-sm text-gray-400">Overview coming soon</p>
+              <p className="text-xs text-gray-300 mt-1">A summary of this company will appear here</p>
+            </div>
+          )}
+
+          {/* ── Due Diligence tab ── */}
+          {tab === 'due_diligence' && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <ClipboardCheck className="w-8 h-8 text-gray-200 mb-2" />
+              <p className="text-sm text-gray-400">Due diligence coming soon</p>
+              <p className="text-xs text-gray-300 mt-1">Tools to manage the due diligence process will appear here</p>
+            </div>
+          )}
 
           {/* ── Company tab ── */}
           {tab === 'info' && (
