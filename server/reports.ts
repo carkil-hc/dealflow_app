@@ -1,9 +1,17 @@
 import { Router } from 'express';
+import { createRequire } from 'node:module';
 import sql from 'mssql';
-import PptxGenJS from 'pptxgenjs';
+import type PptxGenJS from 'pptxgenjs';
 import { getPool } from './db.js';
 import { anthropic } from './anthropic.js';
 import { rowToCompany } from './companies.js';
+
+// pptxgenjs ships an ESM build (pptxgen.es.js) that older Node versions parse
+// as CommonJS and crash on at import time. Load the CommonJS build explicitly
+// via require() so the server boots on every Node version.
+const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
 
 interface CompetitiveProgram {
   company: string;
@@ -32,7 +40,7 @@ async function buildCompetitiveLandscapePptx(
   const GRAY = 'F5F5F5';
   const MID_GRAY = '9CA3AF';
 
-  const pptx = new PptxGenJS();
+  const pptx = new PptxGenJSCtor();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inches
 
   // ── Slide 1: Title ───────────────────────────────────────────────────────
