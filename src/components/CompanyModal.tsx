@@ -289,7 +289,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200" style={{ borderRadius: 2 }}>
+      <div className="relative bg-white w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200" style={{ borderRadius: 2 }}>
 
         {/* Header — HealthCap style: white with teal left border accent */}
         <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-white">
@@ -340,36 +340,40 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 bg-white px-6">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.id
-                  ? 'border-[#005B6E] text-[#005B6E]'
-                  : 'border-transparent text-gray-400 hover:text-[#1A1A1A]'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-              {t.id === 'files' && form.attachments.length > 0 && (
-                <span className="bg-[#E0F0F5] text-[#005B6E] text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
-                  {form.attachments.length}
-                </span>
-              )}
-              {t.id === 'notes' && form.noteEntries.length > 0 && (
-                <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
-                  {form.noteEntries.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Body — left sidebar nav + content */}
+        <div className="flex-1 flex overflow-hidden">
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+          {/* Sidebar nav */}
+          <div className="w-52 shrink-0 border-r border-gray-200 bg-gray-50 py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium border-l-2 transition-colors text-left ${
+                  tab === t.id
+                    ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
+                    : 'border-transparent text-gray-500 hover:text-[#1A1A1A] hover:bg-gray-100'
+                }`}
+                style={{ borderRadius: 2 }}
+              >
+                {t.icon}
+                <span className="flex-1">{t.label}</span>
+                {t.id === 'files' && form.attachments.length > 0 && (
+                  <span className="bg-[#E0F0F5] text-[#005B6E] text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
+                    {form.attachments.length}
+                  </span>
+                )}
+                {t.id === 'notes' && form.noteEntries.length > 0 && (
+                  <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
+                    {form.noteEntries.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
 
           {/* ── Company tab ── */}
           {tab === 'info' && (
@@ -652,6 +656,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
               />
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer */}
