@@ -69,14 +69,12 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
           placeholder="Search companies…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 px-3 py-2 text-sm w-60 focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white"
-          style={{ borderRadius: 2 }}
+          className="border border-gray-200 px-3 py-2 text-sm w-60 focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
         />
         <select
           value={filterStage}
           onChange={(e) => setFilterStage(e.target.value as Stage | 'all')}
-          className="border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white"
-          style={{ borderRadius: 2 }}
+          className="border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
         >
           <option value="all">All Stages</option>
           {ACTIVE_STAGES.map((s) => (
@@ -89,7 +87,7 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 overflow-hidden" style={{ borderRadius: 2 }}>
+      <div className="bg-white border border-gray-200 overflow-hidden rounded-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-gray-200">
@@ -156,7 +154,7 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 ${cfg.badgeBg} ${cfg.badgeText}`} style={{ borderRadius: 2 }}>
+                        <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 ${cfg.badgeBg} ${cfg.badgeText} rounded-sm`}>
                           {cfg.shortLabel}
                         </span>
                       </td>

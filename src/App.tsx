@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Company, Stage, ACTIVE_STAGES } from './types';
+import { Company, Stage, ACTIVE_STAGES, uid } from './types';
 import { getCompanies, upsertCompany, deleteCompany as apiDeleteCompany } from './store';
 import Header, { View } from './components/Header';
 import KanbanView from './components/KanbanView';
@@ -140,7 +140,7 @@ export default function App() {
     const company = companies.find(c => c.id === id);
     if (!company) return;
     const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: uid(),
       type: 'stage_changed' as const,
       fromStage: company.stage,
       toStage: stage,

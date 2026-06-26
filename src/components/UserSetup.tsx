@@ -46,15 +46,13 @@ export default function UserSetup({ onConfirm, existing }: Props) {
             onChange={(e) => { setName(e.target.value); setError(''); }}
             placeholder="e.g. Anna Nilsson"
             autoFocus
-            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] mb-1"
-            style={{ borderRadius: 2 }}
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] mb-1 rounded-sm"
           />
           {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
 
           <button
             type="submit"
-            className="mt-4 w-full bg-[#005B6E] hover:bg-[#004A58] text-white py-2.5 text-sm font-medium transition-colors"
-            style={{ borderRadius: 2 }}
+            className="mt-4 w-full bg-[#005B6E] hover:bg-[#004A58] text-white py-2.5 text-sm font-medium transition-colors rounded-sm"
           >
             Continue
           </button>

@@ -1,6 +1,6 @@
 ﻿import { useRef, useState } from 'react';
 import { Upload, X, Download, FileText, File } from 'lucide-react';
-import { Attachment, formatFileSize, formatDate } from '../types';
+import { Attachment, formatFileSize, formatDate, uid } from '../types';
 import { saveFile, deleteFile, downloadFile } from '../db';
 
 interface Props {
@@ -24,7 +24,7 @@ export default function FileUpload({ attachments, onChange }: Props) {
     setUploading(true);
     const next = [...attachments];
     for (const file of Array.from(files)) {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const id = uid();
       await saveFile(id, file);
       next.push({ id, name: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString() });
     }
@@ -62,7 +62,7 @@ export default function FileUpload({ attachments, onChange }: Props) {
         onClick={() => inputRef.current?.click()}
         className={`border-2 border-dashed px-8 py-10 text-center cursor-pointer transition-colors ${
           dragging ? 'border-[#005B6E] bg-[#E0F0F5]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-        }`} style={{ borderRadius: 2 }}
+        } rounded-sm`}
       >
         <Upload className={`w-7 h-7 mx-auto mb-2 ${dragging ? 'text-[#005B6E]' : 'text-gray-300'}`} />
         <p className="text-sm text-gray-500">{uploading ? 'Uploading…' : 'Drop files here or click to browse'}</p>
@@ -75,7 +75,7 @@ export default function FileUpload({ attachments, onChange }: Props) {
       {attachments.length > 0 && (
         <ul className="space-y-1.5">
           {attachments.map(att => (
-            <li key={att.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2.5" style={{ borderRadius: 2 }}>
+            <li key={att.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-sm">
               {fileIcon(att.type)}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-[#1A1A1A] truncate">{att.name}</div>

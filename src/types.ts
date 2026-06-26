@@ -235,6 +235,12 @@ export const NEXT_MILESTONES = [
   'Revenue Growth',
 ];
 
+// Generate a reasonably-unique id for client-created entities (companies,
+// notes, history entries, attachments).
+export function uid(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

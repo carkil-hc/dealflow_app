@@ -98,14 +98,13 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
           <div ref={menuRef} className="relative">
             <button
               onClick={() => setMenuOpen(o => !o)}
-              className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-[#1A1A1A] px-3 py-2 text-sm transition-colors bg-white"
-              style={{ borderRadius: 2 }}
+              className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-[#1A1A1A] px-3 py-2 text-sm transition-colors bg-white rounded-sm"
             >
               Actions
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 shadow-md w-44 z-50" style={{ borderRadius: 2 }}>
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 shadow-md w-44 z-50 rounded-sm">
                 <button
                   onClick={() => { setMenuOpen(false); onExport(); }}
                   className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#1A1A1A] transition-colors"

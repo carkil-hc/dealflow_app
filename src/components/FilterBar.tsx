@@ -122,8 +122,7 @@ function ComboFilter({ label, options, selected, onChange }: {
         onClick={handleOpen}
         className={`flex items-center gap-1.5 border px-2.5 py-1.5 cursor-pointer transition-colors ${
           open ? 'border-[#005B6E] ring-1 ring-[#005B6E]' : 'border-gray-200 hover:border-gray-300'
-        } bg-white`}
-        style={{ borderRadius: 2 }}
+        } bg-white rounded-sm`}
       >
         <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
         {open ? (
@@ -150,7 +149,7 @@ function ComboFilter({ label, options, selected, onChange }: {
 
       {/* Dropdown list */}
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-0.5 bg-white border border-gray-200 shadow-md z-50 max-h-48 overflow-y-auto" style={{ borderRadius: 2 }}>
+        <div className="absolute top-full left-0 right-0 mt-0.5 bg-white border border-gray-200 shadow-md z-50 max-h-48 overflow-y-auto rounded-sm">
           {filtered.length === 0 ? (
             <div className="px-3 py-2.5 text-sm text-gray-400">No matches</div>
           ) : (
@@ -249,8 +248,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
             open || activeCount > 0
               ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
               : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-[#1A1A1A] bg-white'
-          }`}
-          style={{ borderRadius: 2 }}
+          } rounded-sm`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filters
@@ -270,8 +268,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
               strategyOpen || filters.strategy.length > 0
                 ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
                 : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-[#1A1A1A] bg-white'
-            }`}
-            style={{ borderRadius: 2 }}
+            } rounded-sm`}
           >
             Strategy
             {filters.strategy.length > 0 && (
@@ -283,7 +280,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           </button>
 
           {strategyOpen && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-md z-50 w-36" style={{ borderRadius: 2 }}>
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-md z-50 w-36 rounded-sm">
               <button
                 type="button"
                 onClick={() => onChange({ ...filters, strategy: [] })}
@@ -326,8 +323,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
             onFocus={() => { if (search) setSearchOpen(true); }}
             onKeyDown={e => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
             placeholder="Search companies…"
-            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] outline-none bg-white w-64 transition-colors"
-            style={{ borderRadius: 2 }}
+            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] outline-none bg-white w-64 transition-colors rounded-sm"
           />
           {search && (
             <button
@@ -340,7 +336,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
 
           {/* Results dropdown */}
           {searchOpen && search.trim() && (
-            <div className="absolute top-full left-0 mt-1 w-96 bg-white border border-gray-200 shadow-lg z-50 max-h-80 overflow-y-auto" style={{ borderRadius: 2 }}>
+            <div className="absolute top-full left-0 mt-1 w-96 bg-white border border-gray-200 shadow-lg z-50 max-h-80 overflow-y-auto rounded-sm">
               {searchResults.length === 0 ? (
                 <div className="px-4 py-3 text-sm text-gray-400">No results for "{search}"</div>
               ) : (
@@ -359,7 +355,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
                         <div className="text-sm font-semibold text-[#1A1A1A] truncate">{company.name}</div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           {company.stage && (
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 ${STAGE_CONFIG[company.stage].badgeBg} ${STAGE_CONFIG[company.stage].badgeText}`} style={{ borderRadius: 2 }}>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 ${STAGE_CONFIG[company.stage].badgeBg} ${STAGE_CONFIG[company.stage].badgeText} rounded-sm`}>
                               {STAGE_CONFIG[company.stage].label}
                             </span>
                           )}
@@ -381,8 +377,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           filters[key].map(val => (
             <span
               key={`${key}-${val}`}
-              className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium"
-              style={{ borderRadius: 2 }}
+              className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium rounded-sm"
             >
               <span className="text-[#005B6E]/60 mr-0.5">{FILTER_LABELS[key]}:</span>
               {val}
@@ -395,7 +390,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
 
         {/* Strategy chips */}
         {filters.strategy.map(val => (
-          <span key={`strategy-${val}`} className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium" style={{ borderRadius: 2 }}>
+          <span key={`strategy-${val}`} className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium rounded-sm">
             <span className="text-[#005B6E]/60 mr-0.5">Strategy:</span>
             {val}
             <button onClick={() => onChange({ ...filters, strategy: filters.strategy.filter(v => v !== val) })} className="ml-0.5 hover:text-[#003D4D]">

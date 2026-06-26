@@ -18,8 +18,7 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
   return (
     <div
       onClick={() => onSelect(company)}
-      className="bg-white border border-gray-200 px-3 py-2.5 cursor-pointer hover:border-[#005B6E]/40 hover:shadow-sm transition-all group"
-      style={{ borderRadius: 2 }}
+      className="bg-white border border-gray-200 px-3 py-2.5 cursor-pointer hover:border-[#005B6E]/40 hover:shadow-sm transition-all group rounded-sm"
     >
       {/* Name + owner */}
       <h3 className="font-semibold text-[#1A1A1A] text-sm leading-snug truncate">{company.name}</h3>

@@ -72,8 +72,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
               isOver && !isDraggingFromHere
                 ? 'border-[#005B6E] bg-[#E0F0F5]/30'
                 : 'border-gray-200 bg-white'
-            }`}
-            style={{ borderRadius: 2 }}
+            } rounded-sm`}
           >
             {/* Column header */}
             <div className={`${cfg.headerBg} px-4 py-2.5 border-b border-gray-200`}>
@@ -94,8 +93,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
               {stage === 'new' && (
                 <button
                   onClick={onAdd}
-                  className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-300 hover:border-[#005B6E] hover:text-[#005B6E] text-gray-400 text-sm py-2.5 transition-colors bg-white"
-                  style={{ borderRadius: 2 }}
+                  className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-300 hover:border-[#005B6E] hover:text-[#005B6E] text-gray-400 text-sm py-2.5 transition-colors bg-white rounded-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add Company

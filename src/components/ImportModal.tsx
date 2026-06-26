@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Upload, X, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
-import { Company, Stage } from '../types';
+import { Company, Stage, uid } from '../types';
 
 interface Props {
   existingCompanies: Company[];
@@ -169,7 +169,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
   const handleImport = () => {
     const now = new Date().toISOString();
     const companies: Company[] = toImport.map(r => ({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: uid(),
       name: r.name,
       description: r.description,
       stage: r.stage,
@@ -198,7 +198,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl" style={{ borderRadius: 2 }}>
+      <div className="bg-white w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl rounded-sm">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
@@ -215,7 +215,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
               <CheckCircle className="w-10 h-10 text-[#005B6E]" />
               <p className="text-lg font-semibold text-[#1A1A1A]">{done.imported} {done.imported === 1 ? 'company' : 'companies'} imported</p>
               {done.skipped > 0 && <p className="text-sm text-gray-400">{done.skipped} row{done.skipped !== 1 ? 's' : ''} skipped</p>}
-              <button onClick={onClose} className="mt-2 bg-[#005B6E] hover:bg-[#004A58] text-white px-5 py-2 text-sm font-medium transition-colors" style={{ borderRadius: 2 }}>
+              <button onClick={onClose} className="mt-2 bg-[#005B6E] hover:bg-[#004A58] text-white px-5 py-2 text-sm font-medium transition-colors rounded-sm">
                 Done
               </button>
             </div>
@@ -228,8 +228,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
                   onDragLeave={() => setDragging(false)}
                   onDrop={handleDrop}
                   onClick={() => inputRef.current?.click()}
-                  className={`border-2 border-dashed px-8 py-12 text-center cursor-pointer transition-colors ${dragging ? 'border-[#005B6E] bg-[#E0F0F5]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
-                  style={{ borderRadius: 2 }}
+                  className={`border-2 border-dashed px-8 py-12 text-center cursor-pointer transition-colors ${dragging ? 'border-[#005B6E] bg-[#E0F0F5]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'} rounded-sm`}
                 >
                   <Upload className={`w-8 h-8 mx-auto mb-3 ${dragging ? 'text-[#005B6E]' : 'text-gray-300'}`} />
                   <p className="text-sm font-medium text-gray-600">Drop a CSV file here or click to browse</p>
@@ -240,7 +239,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
 
               {/* Template hint */}
               {!rows && (
-                <div className="bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-500 space-y-1" style={{ borderRadius: 2 }}>
+                <div className="bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-500 space-y-1 rounded-sm">
                   <p className="font-semibold text-gray-600">CSV column names (case-insensitive):</p>
                   <p>name · stage · sector · location · therapeutic area · development stage · funding stage · ask amount · valuation · lead contact · email · phone · website · description · next milestone · rejected reason</p>
                   <p className="mt-1"><span className="font-medium">Stage values:</span> New · First Meeting · Due Diligence · Terms Negotiation · Invested · Backburner · Rejected</p>
@@ -261,18 +260,18 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
 
                   {/* Stats */}
                   <div className="flex flex-wrap gap-3">
-                    <div className="bg-green-50 border border-green-100 px-3 py-2 text-xs" style={{ borderRadius: 2 }}>
+                    <div className="bg-green-50 border border-green-100 px-3 py-2 text-xs rounded-sm">
                       <span className="font-semibold text-green-700">{validRows.length}</span>
                       <span className="text-green-600 ml-1">valid</span>
                     </div>
                     {duplicateCount > 0 && (
-                      <div className="bg-amber-50 border border-amber-100 px-3 py-2 text-xs" style={{ borderRadius: 2 }}>
+                      <div className="bg-amber-50 border border-amber-100 px-3 py-2 text-xs rounded-sm">
                         <span className="font-semibold text-amber-700">{duplicateCount}</span>
                         <span className="text-amber-600 ml-1">duplicate{duplicateCount !== 1 ? 's' : ''}</span>
                       </div>
                     )}
                     {errorCount > 0 && (
-                      <div className="bg-red-50 border border-red-100 px-3 py-2 text-xs" style={{ borderRadius: 2 }}>
+                      <div className="bg-red-50 border border-red-100 px-3 py-2 text-xs rounded-sm">
                         <span className="font-semibold text-red-600">{errorCount}</span>
                         <span className="text-red-500 ml-1">error{errorCount !== 1 ? 's' : ''}</span>
                       </div>
@@ -286,7 +285,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
                   </div>
 
                   {/* Table */}
-                  <div className="border border-gray-200 overflow-hidden" style={{ borderRadius: 2 }}>
+                  <div className="border border-gray-200 overflow-hidden rounded-sm">
                     <div className="overflow-x-auto max-h-64">
                       <table className="w-full text-xs">
                         <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
@@ -335,14 +334,13 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
               {toImport.length} {toImport.length === 1 ? 'company' : 'companies'} will be imported
             </p>
             <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-[#1A1A1A] border border-gray-200 hover:border-gray-300 transition-colors" style={{ borderRadius: 2 }}>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-[#1A1A1A] border border-gray-200 hover:border-gray-300 transition-colors rounded-sm">
                 Cancel
               </button>
               <button
                 onClick={handleImport}
                 disabled={toImport.length === 0}
-                className="px-4 py-2 text-sm font-medium bg-[#005B6E] hover:bg-[#004A58] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ borderRadius: 2 }}
+                className="px-4 py-2 text-sm font-medium bg-[#005B6E] hover:bg-[#004A58] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm"
               >
                 Import {toImport.length > 0 ? toImport.length : ''} {toImport.length === 1 ? 'Company' : 'Companies'}
               </button>

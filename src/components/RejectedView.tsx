@@ -18,12 +18,12 @@ export default function RejectedView({ companies, onSelect }: Props) {
       </div>
 
       {companies.length === 0 ? (
-        <div className="bg-white border border-gray-200 py-16 text-center" style={{ borderRadius: 2 }}>
+        <div className="bg-white border border-gray-200 py-16 text-center rounded-sm">
           <XCircle className="w-8 h-8 text-gray-200 mx-auto mb-2" />
           <p className="text-gray-400 text-sm">No rejected companies</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 overflow-hidden" style={{ borderRadius: 2 }}>
+        <div className="bg-white border border-gray-200 overflow-hidden rounded-sm">
           <table className="w-full">
             <thead className="border-b border-gray-200">
               <tr>

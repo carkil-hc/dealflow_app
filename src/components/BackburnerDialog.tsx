@@ -30,7 +30,7 @@ export default function BackburnerDialog({ company, onConfirm, onSkip }: Props) 
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm shadow-xl border border-gray-200" style={{ borderRadius: 2 }}>
+      <div className="bg-white w-full max-w-sm shadow-xl border border-gray-200 rounded-sm">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
@@ -61,8 +61,7 @@ export default function BackburnerDialog({ company, onConfirm, onSkip }: Props) 
                     date === val
                       ? 'border-stone-400 bg-stone-50 text-stone-700 font-medium'
                       : 'border-gray-200 text-gray-600 hover:border-gray-400 hover:text-[#1A1A1A]'
-                  }`}
-                  style={{ borderRadius: 2 }}
+                  } rounded-sm`}
                 >
                   {opt.label}
                   <span className="block text-[11px] text-gray-400 font-normal mt-0.5">{formatReminder(val)}</span>
@@ -81,8 +80,7 @@ export default function BackburnerDialog({ company, onConfirm, onSkip }: Props) 
               value={date}
               min={new Date().toISOString().slice(0, 10)}
               onChange={e => setDate(e.target.value)}
-              className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white"
-              style={{ borderRadius: 2 }}
+              className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
             />
           </div>
         </div>
@@ -98,8 +96,7 @@ export default function BackburnerDialog({ company, onConfirm, onSkip }: Props) 
           <button
             onClick={() => onConfirm(company, date || undefined)}
             disabled={!date}
-            className="px-4 py-2 text-sm font-medium bg-stone-600 hover:bg-stone-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ borderRadius: 2 }}
+            className="px-4 py-2 text-sm font-medium bg-stone-600 hover:bg-stone-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm"
           >
             Set Reminder
           </button>

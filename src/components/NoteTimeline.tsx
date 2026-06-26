@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Send, Pencil, Trash2, Check, X } from 'lucide-react';
-import { NoteEntry, formatDateTime, userInitials, userColor } from '../types';
+import { NoteEntry, formatDateTime, userInitials, userColor, uid } from '../types';
 
 interface Props {
   notes: NoteEntry[];
@@ -20,7 +20,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
   const handleAdd = () => {
     if (!draft.trim()) return;
     const entry: NoteEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: uid(),
       text: draft.trim(),
       createdAt: new Date().toISOString(),
       createdBy: currentUser,
@@ -62,7 +62,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
   return (
     <div className="flex flex-col gap-5">
       {/* Compose */}
-      <div className="border border-gray-200 bg-white" style={{ borderRadius: 2 }}>
+      <div className="border border-gray-200 bg-white rounded-sm">
         <textarea
           value={draft}
           onChange={e => setDraft(e.target.value)}
@@ -76,8 +76,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
           <button
             onClick={handleAdd}
             disabled={!draft.trim()}
-            className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors"
-            style={{ borderRadius: 2 }}
+            className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
           >
             <Send className="w-3 h-3" />
             Add Note
@@ -121,22 +120,19 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
                         onKeyDown={e => handleEditKey(e, note.id)}
                         rows={3}
                         autoFocus
-                        className="w-full border border-[#005B6E] ring-1 ring-[#005B6E] px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none resize-none bg-white"
-                        style={{ borderRadius: 2 }}
+                        className="w-full border border-[#005B6E] ring-1 ring-[#005B6E] px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none resize-none bg-white rounded-sm"
                       />
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
                           onClick={() => saveEdit(note.id)}
                           disabled={!editText.trim()}
-                          className="flex items-center gap-1 text-xs bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white px-2.5 py-1 transition-colors"
-                          style={{ borderRadius: 2 }}
+                          className="flex items-center gap-1 text-xs bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white px-2.5 py-1 transition-colors rounded-sm"
                         >
                           <Check className="w-3 h-3" /> Save
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1 hover:bg-gray-100 transition-colors"
-                          style={{ borderRadius: 2 }}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1 hover:bg-gray-100 transition-colors rounded-sm"
                         >
                           <X className="w-3 h-3" /> Cancel
                         </button>
@@ -144,7 +140,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-wrap bg-white border border-gray-100 px-3 py-2" style={{ borderRadius: 2 }}>
+                    <p className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-wrap bg-white border border-gray-100 px-3 py-2 rounded-sm">
                       {note.text}
                     </p>
                   )}

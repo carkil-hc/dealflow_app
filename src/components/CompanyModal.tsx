@@ -8,8 +8,9 @@ import {
 import {
   Company, Stage, Strategy, STAGE_CONFIG, ACTIVE_STAGES, PIPELINE_STAGES, NEXT_STAGE,
   SECTORS, STRATEGIES, DEVELOPMENT_STAGES, THERAPEUTIC_AREAS, FUNDING_STAGES, NEXT_MILESTONES,
-  NoteEntry, HistoryEntry, formatDate, formatDateTime,
+  NoteEntry, HistoryEntry, formatDate, formatDateTime, uid,
 } from '../types';
+import { INPUT, LABEL } from '../ui';
 import FileUpload from './FileUpload';
 import NoteTimeline from './NoteTimeline';
 
@@ -30,7 +31,7 @@ interface AgentReportCardProps {
 
 function AgentReportCard({ title, description, report, running, copied, onRun, onCopy, onSaveAsNote }: AgentReportCardProps) {
   return (
-    <div className="border border-gray-200 bg-white" style={{ borderRadius: 2 }}>
+    <div className="border border-gray-200 bg-white rounded-sm">
       <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-4">
         <div>
           <div className="text-sm font-semibold text-[#1A1A1A]">{title}</div>
@@ -39,8 +40,7 @@ function AgentReportCard({ title, description, report, running, copied, onRun, o
         <button
           onClick={onRun}
           disabled={running}
-          className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors"
-          style={{ borderRadius: 2 }}
+          className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
         >
           {running
             ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>
@@ -54,21 +54,19 @@ function AgentReportCard({ title, description, report, running, copied, onRun, o
           <div className="text-[11px] text-gray-400 mb-2">
             Generated {new Date(report.runAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </div>
-          <div className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-wrap bg-gray-50 border border-gray-100 px-3 py-3 max-h-80 overflow-y-auto" style={{ borderRadius: 2 }}>
+          <div className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-wrap bg-gray-50 border border-gray-100 px-3 py-3 max-h-80 overflow-y-auto rounded-sm">
             {report.text}
           </div>
           <div className="flex items-center gap-2 mt-2.5">
             <button
               onClick={() => onCopy(report.text)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors"
-              style={{ borderRadius: 2 }}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
             >
               {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
             </button>
             <button
               onClick={onSaveAsNote}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors"
-              style={{ borderRadius: 2 }}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
             >
               <StickyNote className="w-3 h-3" /> Save as note
             </button>
@@ -156,10 +154,6 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'dd_reports',    label: 'DD Reports',     icon: <FlaskConical className="w-3.5 h-3.5" /> },
 ];
 
-function uid() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function addHistory(form: Company, entry: Omit<HistoryEntry, 'id'>): Company {
   return { ...form, history: [...(form.history || []), { id: uid(), ...entry }] };
 }
@@ -167,7 +161,7 @@ function addHistory(form: Company, entry: Omit<HistoryEntry, 'id'>): Company {
 function newCompany(owner?: string): Company {
   const now = new Date().toISOString();
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: uid(),
     name: '', description: '', stage: 'new',
     owner,
     noteEntries: [], attachments: [], history: [],
@@ -183,10 +177,6 @@ const REJECTION_REASONS = [
   'No IP',
   'Market opportunity',
 ];
-
-// Shared input class
-const INPUT = 'w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white';
-const LABEL = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1';
 
 export default function CompanyModal({ company, currentUser, onSave, onDelete, onClose }: Props) {
   const [form, setForm] = useState<Company>(() => company ?? newCompany(currentUser));
@@ -291,7 +281,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200" style={{ borderRadius: 2 }}>
+      <div className="relative bg-white w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200 rounded-sm">
 
         {/* Header — HealthCap style: white with teal left border accent */}
         <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between bg-white">
@@ -327,7 +317,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300" />}
                   <span className={`px-2 py-0.5 font-medium ${
                     isActive ? `${sc.badgeBg} ${sc.badgeText}` : isPast ? 'text-gray-300 line-through' : 'text-gray-400'
-                  }`} style={{ borderRadius: 2 }}>
+                  } rounded-sm`}>
                     {sc.shortLabel}
                   </span>
                 </span>
@@ -336,7 +326,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
             {isRejected && (
               <span className="flex items-center gap-1 shrink-0">
                 <ChevronRight className="w-3 h-3 text-gray-300" />
-                <span className="px-2 py-0.5 font-medium bg-red-50 text-red-600" style={{ borderRadius: 2 }}>Rejected</span>
+                <span className="px-2 py-0.5 font-medium bg-red-50 text-red-600 rounded-sm">Rejected</span>
               </span>
             )}
           </div>
@@ -355,18 +345,17 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   tab === t.id
                     ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
                     : 'border-transparent text-gray-500 hover:text-[#1A1A1A] hover:bg-gray-100'
-                }`}
-                style={{ borderRadius: 2 }}
+                } rounded-sm`}
               >
                 {t.icon}
                 <span className="flex-1">{t.label}</span>
                 {t.id === 'files' && form.attachments.length > 0 && (
-                  <span className="bg-[#E0F0F5] text-[#005B6E] text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
+                  <span className="bg-[#E0F0F5] text-[#005B6E] text-[10px] font-bold px-1.5 py-0.5 leading-none rounded-sm">
                     {form.attachments.length}
                   </span>
                 )}
                 {t.id === 'notes' && form.noteEntries.length > 0 && (
-                  <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 leading-none" style={{ borderRadius: 2 }}>
+                  <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 leading-none rounded-sm">
                     {form.noteEntries.length}
                   </span>
                 )}
@@ -404,7 +393,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <input type="text" value={form.name}
                   onChange={e => set('name', e.target.value)}
                   placeholder="e.g. Genomica Therapeutics"
-                  className={`${INPUT} ${errors.name ? 'border-red-400' : ''}`} style={{ borderRadius: 2 }} />
+                  className={`${INPUT} ${errors.name ? 'border-red-400' : ''}`} />
                 {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
               </div>
 
@@ -412,7 +401,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <label className={LABEL}>Description</label>
                 <textarea value={form.description} onChange={e => set('description', e.target.value)}
                   rows={3} placeholder="Brief description of the company and its technology…"
-                  className={`${INPUT} resize-none`} style={{ borderRadius: 2 }} />
+                  className={`${INPUT} resize-none`} />
               </div>
 
               {/* 2-col grid */}
@@ -420,7 +409,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <div>
                   <label className={LABEL}>Sector</label>
                   <select value={form.sector || ''} onChange={e => set('sector', e.target.value || undefined)}
-                    className={INPUT} style={{ borderRadius: 2 }}>
+                    className={INPUT}>
                     <option value="">Select…</option>
                     {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -428,7 +417,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <div>
                   <label className={LABEL}>Therapeutic Area</label>
                   <select value={form.therapeuticArea || ''} onChange={e => set('therapeuticArea', e.target.value || undefined)}
-                    className={INPUT} style={{ borderRadius: 2 }}>
+                    className={INPUT}>
                     <option value="">Select…</option>
                     {THERAPEUTIC_AREAS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -446,7 +435,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                           (form.strategy ?? 'N/a') === s
                             ? 'bg-[#005B6E] text-white border-[#005B6E]'
                             : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
-                        }`} style={{ borderRadius: 2 }}>
+                        } rounded-sm`}>
                         {s}
                       </button>
                     ))}
@@ -456,7 +445,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   <label className={LABEL}>Owner</label>
                   <input type="text" value={form.owner || ''}
                     onChange={e => set('owner', e.target.value || undefined)}
-                    placeholder="e.g. Carl" className={INPUT} style={{ borderRadius: 2 }} />
+                    placeholder="e.g. Carl" className={INPUT} />
                 </div>
               </div>
 
@@ -464,7 +453,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <div>
                   <label className={LABEL}>Development Stage</label>
                   <select value={form.developmentStage || ''} onChange={e => set('developmentStage', e.target.value || undefined)}
-                    className={INPUT} style={{ borderRadius: 2 }}>
+                    className={INPUT}>
                     <option value="">Select…</option>
                     {DEVELOPMENT_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -472,7 +461,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <div>
                   <label className={LABEL}>Next Milestone</label>
                   <select value={form.nextMilestone || ''} onChange={e => set('nextMilestone', e.target.value || undefined)}
-                    className={INPUT} style={{ borderRadius: 2 }}>
+                    className={INPUT}>
                     <option value="">Select…</option>
                     {NEXT_MILESTONES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -484,13 +473,13 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   <label className={LABEL}>Country</label>
                   <input type="text" value={form.location || ''}
                     onChange={e => set('location', e.target.value || undefined)}
-                    placeholder="e.g. Sweden" className={INPUT} style={{ borderRadius: 2 }} />
+                    placeholder="e.g. Sweden" className={INPUT} />
                 </div>
                 <div>
                   <label className={LABEL}>Website</label>
                   <input type="url" value={form.website || ''}
                     onChange={e => set('website', e.target.value || undefined)}
-                    placeholder="https://…" className={INPUT} style={{ borderRadius: 2 }} />
+                    placeholder="https://…" className={INPUT} />
                 </div>
               </div>
 
@@ -507,7 +496,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                           form.stage === s
                             ? `${sc.badgeBg} ${sc.badgeText} border-current`
                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-700'
-                        }`} style={{ borderRadius: 2 }}>
+                        } rounded-sm`}>
                         {sc.label}
                       </button>
                     );
@@ -516,7 +505,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
               </div>
 
               {form.stage === 'backburner' && (
-                <div className="bg-stone-50 border border-stone-200 px-4 py-3" style={{ borderRadius: 2 }}>
+                <div className="bg-stone-50 border border-stone-200 px-4 py-3 rounded-sm">
                   <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">
                     Follow-up Reminder
                   </label>
@@ -524,14 +513,13 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                     type="date"
                     value={form.backburnerReminder || ''}
                     onChange={e => set('backburnerReminder', e.target.value || undefined)}
-                    className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-400 bg-white"
-                    style={{ borderRadius: 2 }}
+                    className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-400 bg-white rounded-sm"
                   />
                 </div>
               )}
 
               {isRejected && form.rejectedReason && (
-                <div className="bg-red-50 border border-red-100 px-4 py-3" style={{ borderRadius: 2 }}>
+                <div className="bg-red-50 border border-red-100 px-4 py-3 rounded-sm">
                   <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wide mb-1">Rejection Reason</p>
                   <p className="text-sm text-red-700">{form.rejectedReason}</p>
                   {form.rejectedAt && <p className="text-[11px] text-red-400 mt-1">Rejected {formatDate(form.rejectedAt)}</p>}
@@ -548,7 +536,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <input type="text" value={form.owner || ''}
                   onChange={e => set('owner', e.target.value || undefined)}
                   placeholder="e.g. Anna Lindqvist"
-                  className={INPUT} style={{ borderRadius: 2 }} />
+                  className={INPUT} />
               </div>
 
               <div className="border-t border-gray-100 pt-5">
@@ -556,7 +544,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   <div>
                     <label className={LABEL}>Financial Stage</label>
                     <select value={form.fundingStage || ''} onChange={e => set('fundingStage', e.target.value || undefined)}
-                      className={INPUT} style={{ borderRadius: 2 }}>
+                      className={INPUT}>
                       <option value="">Select…</option>
                       {FUNDING_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -565,7 +553,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                     <label className={LABEL}>Ask Amount</label>
                     <input type="text" value={form.askAmount || ''}
                       onChange={e => set('askAmount', e.target.value || undefined)}
-                      placeholder="e.g. €15M" className={INPUT} style={{ borderRadius: 2 }} />
+                      placeholder="e.g. €15M" className={INPUT} />
                   </div>
                 </div>
               </div>
@@ -574,14 +562,14 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <label className={LABEL}>Pre-Money Valuation</label>
                 <input type="text" value={form.valuation || ''}
                   onChange={e => set('valuation', e.target.value || undefined)}
-                  placeholder="e.g. €60M" className={INPUT} style={{ borderRadius: 2 }} />
+                  placeholder="e.g. €60M" className={INPUT} />
               </div>
 
               <div className="border-t border-gray-100 pt-5">
                 <label className={LABEL}>Lead Contact</label>
                 <input type="text" value={form.leadContact || ''}
                   onChange={e => set('leadContact', e.target.value || undefined)}
-                  placeholder="Full name" className={INPUT} style={{ borderRadius: 2 }} />
+                  placeholder="Full name" className={INPUT} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -589,13 +577,13 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   <label className={LABEL}>Email</label>
                   <input type="email" value={form.email || ''}
                     onChange={e => set('email', e.target.value || undefined)}
-                    placeholder="contact@company.com" className={INPUT} style={{ borderRadius: 2 }} />
+                    placeholder="contact@company.com" className={INPUT} />
                 </div>
                 <div>
                   <label className={LABEL}>Phone</label>
                   <input type="tel" value={form.phone || ''}
                     onChange={e => set('phone', e.target.value || undefined)}
-                    placeholder="+1 (555) 000-0000" className={INPUT} style={{ borderRadius: 2 }} />
+                    placeholder="+1 (555) 000-0000" className={INPUT} />
                 </div>
               </div>
             </div>
@@ -666,7 +654,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                   const r = ddReports['competitive_landscape'];
                   if (!r) return;
                   const note = {
-                    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    id: uid(),
                     text: `**Competitive Landscape Analysis**\n\n${r.text}`,
                     createdAt: r.runAt,
                     createdBy: 'Claude',
@@ -687,17 +675,17 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-red-600 font-medium">Delete permanently?</span>
                   <button onClick={() => onDelete(form.id)}
-                    className="bg-red-600 text-white text-xs px-3 py-1.5 hover:bg-red-700 transition-colors" style={{ borderRadius: 2 }}>
+                    className="bg-red-600 text-white text-xs px-3 py-1.5 hover:bg-red-700 transition-colors rounded-sm">
                     Yes, delete
                   </button>
                   <button onClick={() => setShowDeleteConfirm(false)}
-                    className="text-gray-500 text-xs px-3 py-1.5 hover:bg-gray-200 transition-colors" style={{ borderRadius: 2 }}>
+                    className="text-gray-500 text-xs px-3 py-1.5 hover:bg-gray-200 transition-colors rounded-sm">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <button onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 text-red-400 hover:text-red-600 text-sm px-3 py-2 hover:bg-red-50 transition-colors" style={{ borderRadius: 2 }}>
+                  className="flex items-center gap-1.5 text-red-400 hover:text-red-600 text-sm px-3 py-2 hover:bg-red-50 transition-colors rounded-sm">
                   <Trash2 className="w-4 h-4" /> Delete
                 </button>
               )
@@ -707,25 +695,25 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
           <div className="flex items-center gap-2">
             {!isRejected ? (
               <button onClick={() => setShowRejectDialog(true)}
-                className="flex items-center gap-1.5 text-red-400 hover:text-red-600 text-sm px-3 py-2 hover:bg-red-50 transition-colors" style={{ borderRadius: 2 }}>
+                className="flex items-center gap-1.5 text-red-400 hover:text-red-600 text-sm px-3 py-2 hover:bg-red-50 transition-colors rounded-sm">
                 <XCircle className="w-4 h-4" /> Reject
               </button>
             ) : (
               <button onClick={handleReactivate}
-                className="flex items-center gap-1.5 text-[#005B6E] hover:text-[#004A58] text-sm px-3 py-2 hover:bg-[#E0F0F5] transition-colors" style={{ borderRadius: 2 }}>
+                className="flex items-center gap-1.5 text-[#005B6E] hover:text-[#004A58] text-sm px-3 py-2 hover:bg-[#E0F0F5] transition-colors rounded-sm">
                 <RotateCcw className="w-4 h-4" /> Reactivate
               </button>
             )}
 
             {nextStage && !isRejected && (
               <button onClick={handleAdvance}
-                className="flex items-center gap-1.5 text-sm px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors" style={{ borderRadius: 2 }}>
+                className="flex items-center gap-1.5 text-sm px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors rounded-sm">
                 <ArrowRight className="w-4 h-4" /> Advance to {STAGE_CONFIG[nextStage].shortLabel}
               </button>
             )}
 
             <button onClick={handleSave}
-              className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white text-sm px-4 py-2 font-medium transition-colors" style={{ borderRadius: 2 }}>
+              className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm">
               <Save className="w-4 h-4" />
               {isNew ? 'Add Company' : 'Save Changes'}
             </button>
@@ -736,7 +724,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
       {/* Reject dialog */}
       {showRejectDialog && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 p-6 w-full max-w-md shadow-xl" style={{ borderRadius: 2 }}>
+          <div className="bg-white border border-gray-200 p-6 w-full max-w-md shadow-xl rounded-sm">
             <h3 className="font-bold text-[#1A1A1A] mb-1">Reject Company</h3>
             <p className="text-sm text-gray-500 mb-4">
               Select a reason for rejecting <strong>{form.name || 'this company'}</strong>.
@@ -751,8 +739,7 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
                     rejectReason === reason
                       ? 'bg-red-50 border-red-400 text-red-700 font-medium'
                       : 'border-gray-200 text-gray-600 hover:border-gray-400 hover:text-[#1A1A1A]'
-                  }`}
-                  style={{ borderRadius: 2 }}
+                  } rounded-sm`}
                 >
                   {reason}
                 </button>
@@ -760,11 +747,11 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setShowRejectDialog(false); setRejectReason(''); }}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors" style={{ borderRadius: 2 }}>
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors rounded-sm">
                 Cancel
               </button>
               <button onClick={handleReject} disabled={!rejectReason}
-                className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderRadius: 2 }}>
+                className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm">
                 Confirm Rejection
               </button>
             </div>
