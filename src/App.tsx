@@ -13,18 +13,24 @@ import UserSetup from './components/UserSetup';
 
 const USER_KEY = 'hc-current-user';
 
+// Local development runs without Azure Easy Auth. Everywhere else the identity
+// must come from Microsoft sign-in.
+const IS_LOCALHOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+
 export default function App() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [view, setView] = useState<View>('kanban');
   const [selected, setSelected] = useState<Company | null | 'new'>(null);
   const [currentUser, setCurrentUser] = useState<string>(() => localStorage.getItem(USER_KEY) ?? '');
   const [showUserSetup, setShowUserSetup] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [pendingBackburner, setPendingBackburner] = useState<Company | null>(null);
 
-  // Auto-identify user via Easy Auth (production only).
-  // If the header is present the name is set silently — no setup screen needed.
+  // Identify the user via Easy Auth. In production, if there is no Microsoft
+  // session, send the browser to the Microsoft sign-in page rather than showing
+  // the manual name-entry screen (which exists only for local development).
   useEffect(() => {
     fetch('/api/me')
       .then(r => r.json())
@@ -32,9 +38,14 @@ export default function App() {
         if (name) {
           localStorage.setItem(USER_KEY, name);
           setCurrentUser(name);
+          setAuthChecked(true);
+        } else if (!IS_LOCALHOST) {
+          window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+        } else {
+          setAuthChecked(true);
         }
       })
-      .catch(() => { /* local dev — fall through to manual setup */ });
+      .catch(() => setAuthChecked(true));
   }, []);
 
   useEffect(() => {
@@ -161,8 +172,19 @@ export default function App() {
   const counts: Record<string, number> = {};
   for (const s of ACTIVE_STAGES) counts[s] = companies.filter(c => c.stage === s).length;
 
-  // Show user setup on first visit or when triggered
-  if (!currentUser || showUserSetup) {
+  // Production: wait for the Microsoft identity check before rendering anything
+  // (avoids briefly flashing stale/cached UI, and we redirect to sign-in if needed).
+  if (!IS_LOCALHOST && !authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] text-sm text-gray-400">
+        Signing in…
+      </div>
+    );
+  }
+
+  // Manual name entry is for local development only; in production identity comes
+  // from Microsoft. showUserSetup still allows an explicit "change user" action.
+  if ((IS_LOCALHOST && !currentUser) || showUserSetup) {
     return <UserSetup onConfirm={handleConfirmUser} existing={currentUser || undefined} />;
   }
 
