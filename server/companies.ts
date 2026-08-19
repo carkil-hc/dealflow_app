@@ -131,6 +131,25 @@ companiesRouter.post('/api/companies', async (req, res) => {
   }
 });
 
+// POST /bulk — insert/update many companies in one request (used by CSV import).
+// Upserts sequentially against the small connection pool so a large import
+// persists reliably instead of flooding the pool with concurrent requests.
+companiesRouter.post('/api/companies/bulk', async (req, res) => {
+  const list = Array.isArray(req.body) ? req.body : [];
+  try {
+    const pool = await getPool();
+    let count = 0;
+    for (const c of list) {
+      await upsertOne(pool, c);
+      count++;
+    }
+    res.json({ ok: true, count });
+  } catch (err) {
+    console.error('[bulk import]', err);
+    res.status(500).json({ error: 'Bulk import failed', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 // PUT /:id — update a single company (used by the app)
 companiesRouter.put('/api/companies/:id', async (req, res) => {
   try {

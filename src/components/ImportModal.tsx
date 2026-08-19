@@ -4,7 +4,7 @@ import { Company, Stage, uid } from '../types';
 
 interface Props {
   existingCompanies: Company[];
-  onImport: (companies: Company[]) => void;
+  onImport: (companies: Company[]) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -139,6 +139,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
   const [rows, setRows] = useState<RowResult[] | null>(null);
   const [fileName, setFileName] = useState('');
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [done, setDone] = useState<{ imported: number; skipped: number } | null>(null);
 
   const existingNames = new Set(existingCompanies.map(c => c.name.toLowerCase()));
@@ -166,7 +167,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
   const duplicateCount = validRows.filter(r => r.isDuplicate).length;
   const errorCount = rows?.filter(r => r.errors.length > 0).length ?? 0;
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const now = new Date().toISOString();
     const companies: Company[] = toImport.map(r => ({
       id: uid(),
@@ -192,8 +193,13 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
       createdAt: now,
       updatedAt: now,
     }));
-    onImport(companies);
-    setDone({ imported: companies.length, skipped: (rows?.length ?? 0) - companies.length });
+    setImporting(true);
+    try {
+      await onImport(companies);
+      setDone({ imported: companies.length, skipped: (rows?.length ?? 0) - companies.length });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -339,10 +345,12 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
               </button>
               <button
                 onClick={handleImport}
-                disabled={toImport.length === 0}
+                disabled={toImport.length === 0 || importing}
                 className="px-4 py-2 text-sm font-medium bg-[#005B6E] hover:bg-[#004A58] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm"
               >
-                Import {toImport.length > 0 ? toImport.length : ''} {toImport.length === 1 ? 'Company' : 'Companies'}
+                {importing
+                  ? `Importing ${toImport.length}…`
+                  : `Import ${toImport.length > 0 ? toImport.length : ''} ${toImport.length === 1 ? 'Company' : 'Companies'}`}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Company, Stage, ACTIVE_STAGES, uid } from './types';
-import { getCompanies, upsertCompany, deleteCompany as apiDeleteCompany } from './store';
+import { getCompanies, upsertCompany, deleteCompany as apiDeleteCompany, bulkUpsertCompanies } from './store';
 import Header, { View } from './components/Header';
 import KanbanView from './components/KanbanView';
 import ListView from './components/ListView';
@@ -119,9 +119,24 @@ export default function App() {
     setPendingBackburner(null);
   };
 
-  const handleImport = (imported: Company[]) => {
-    setCompanies([...companies, ...imported]);
-    imported.forEach(c => upsertCompany(c).catch(console.error));
+  // Persist an imported batch in awaited chunks (not one request per row, which
+  // floods the connection pool and silently drops most). Reload from the DB at
+  // the end so the UI reflects exactly what was saved.
+  const handleImport = async (imported: Company[]) => {
+    const CHUNK = 200;
+    for (let i = 0; i < imported.length; i += CHUNK) {
+      const batch = imported.slice(i, i + CHUNK);
+      try {
+        await bulkUpsertCompanies(batch);
+      } catch (e) {
+        console.error(`Import chunk ${i}–${i + batch.length} failed`, e);
+      }
+    }
+    try {
+      setCompanies(await getCompanies());
+    } catch {
+      setCompanies(prev => [...prev, ...imported]); // fallback to optimistic
+    }
   };
 
   const handleExport = () => {
@@ -237,7 +252,7 @@ export default function App() {
       {showImport && (
         <ImportModal
           existingCompanies={companies}
-          onImport={(imported) => { handleImport(imported); setShowImport(false); }}
+          onImport={handleImport}
           onClose={() => setShowImport(false)}
         />
       )}
