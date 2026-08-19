@@ -98,6 +98,17 @@ export default function App() {
     setSelected(null);
   };
 
+  // Persist changes made inside the open modal (e.g. adding a note) without
+  // closing it. Deliberately does not touch `selected`: changing the modal's
+  // `company` prop would reset its form and active tab.
+  const handleAutoSave = (company: Company) => {
+    const exists = companies.some(c => c.id === company.id);
+    persist(
+      exists ? companies.map(c => c.id === company.id ? company : c) : [...companies, company],
+      company,
+    );
+  };
+
   const commitBackburner = (company: Company, reminderDate: string | undefined) => {
     const updated = { ...company, backburnerReminder: reminderDate };
     const exists = companies.some(c => c.id === updated.id);
@@ -236,6 +247,7 @@ export default function App() {
           company={selected === 'new' ? null : selected}
           currentUser={currentUser}
           onSave={handleSave}
+          onAutoSave={handleAutoSave}
           onDelete={handleDelete}
           onClose={() => setSelected(null)}
         />

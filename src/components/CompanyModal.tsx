@@ -21,6 +21,7 @@ interface Props {
   company: Company | null;
   currentUser: string;
   onSave: (c: Company) => void;
+  onAutoSave: (c: Company) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
@@ -49,7 +50,7 @@ function newCompany(owner?: string): Company {
   };
 }
 
-export default function CompanyModal({ company, currentUser, onSave, onDelete, onClose }: Props) {
+export default function CompanyModal({ company, currentUser, onSave, onAutoSave, onDelete, onClose }: Props) {
   const [form, setForm] = useState<Company>(() => company ?? newCompany(currentUser));
   const [tab, setTab] = useState<Tab>('overview');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -128,7 +129,12 @@ export default function CompanyModal({ company, currentUser, onSave, onDelete, o
     if (added) updated = addHistory(updated, { type: 'note_added', timestamp: now, user: currentUser });
     if (removed) updated = addHistory(updated, { type: 'note_deleted', timestamp: now, user: currentUser });
     if (edited) updated = addHistory(updated, { type: 'note_edited', timestamp: now, user: currentUser });
+    updated = { ...updated, updatedAt: now };
     setForm(updated);
+    // Persist note changes immediately (without closing the modal) so the user
+    // doesn't have to also click "Save Changes". For a brand-new, unsaved company
+    // the note is kept in local state and saved when the company is first created.
+    if (!isNew) onAutoSave(updated);
   };
 
   const handleFileChange = (atts: typeof form.attachments) => {
