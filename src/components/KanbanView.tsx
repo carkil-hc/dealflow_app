@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { Company, ACTIVE_STAGES, STAGE_CONFIG, NEXT_STAGE, Stage } from '../types';
+import { Company, BOARD_STAGES, STAGE_CONFIG, NEXT_STAGE, Stage } from '../types';
 import CompanyCard from './CompanyCard';
 
 interface Props {
@@ -56,7 +56,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-4" style={{ height: 'calc(100vh - 196px)' }}>
-      {ACTIVE_STAGES.map((stage) => {
+      {BOARD_STAGES.map((stage) => {
         const cfg = STAGE_CONFIG[stage];
         const stageCompanies = companies.filter((c) => c.stage === stage);
         const isOver = dragOverStage === stage;

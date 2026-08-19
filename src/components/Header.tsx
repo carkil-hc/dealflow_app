@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
-import { LayoutGrid, List, XCircle, ChevronDown, Upload, Download, LogOut } from 'lucide-react';
+import { LayoutGrid, List, XCircle, CheckCircle2, ChevronDown, Upload, Download, LogOut } from 'lucide-react';
 
-export type View = 'kanban' | 'list' | 'rejected';
+export type View = 'kanban' | 'list' | 'rejected' | 'invested';
 
 interface Props {
   view: View;
@@ -10,11 +10,12 @@ interface Props {
   onExport: () => void;
   counts: Record<string, number>;
   rejectedCount: number;
+  investedCount: number;
   currentUser: string;
   onChangeUser: () => void;
 }
 
-export default function Header({ view, setView, onImport, onExport, counts, rejectedCount, currentUser, onChangeUser }: Props) {
+export default function Header({ view, setView, onImport, onExport, counts, rejectedCount, investedCount, currentUser, onChangeUser }: Props) {
   const totalActive = Object.values(counts).reduce((a, b) => a + b, 0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -41,6 +42,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
           {/* Pipeline count */}
           <span className="hidden lg:block text-xs text-gray-400">
             <span className="font-medium text-[#1A1A1A]">{totalActive}</span> active
+            {investedCount > 0 && <> · <span className="text-[#005B6E] font-medium">{investedCount}</span> invested</>}
             {rejectedCount > 0 && <> · <span className="text-red-500 font-medium">{rejectedCount}</span> rejected</>}
           </span>
         </div>
@@ -50,8 +52,9 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
           {([
             { id: 'kanban' as View, label: 'Board',    Icon: LayoutGrid },
             { id: 'list'   as View, label: 'List',     Icon: List },
-            { id: 'rejected' as View, label: 'Rejected', Icon: XCircle, count: rejectedCount },
-          ]).map(({ id, label, Icon, count }) => (
+            { id: 'invested' as View, label: 'Invested', Icon: CheckCircle2, count: investedCount, badge: 'bg-[#E0F0F5] text-[#005B6E]' },
+            { id: 'rejected' as View, label: 'Rejected', Icon: XCircle, count: rejectedCount, badge: 'bg-red-100 text-red-600' },
+          ]).map(({ id, label, Icon, count, badge }) => (
             <button
               key={id}
               onClick={() => setView(id)}
@@ -64,7 +67,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
               <Icon className="w-4 h-4" />
               {label}
               {count != null && count > 0 && (
-                <span className="ml-0.5 bg-red-100 text-red-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">
+                <span className={`ml-0.5 ${badge} text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none`}>
                   {count}
                 </span>
               )}

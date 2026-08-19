@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Company, Stage, ACTIVE_STAGES, uid } from './types';
+import { Company, Stage, BOARD_STAGES, uid } from './types';
 import { getCompanies, upsertCompany, deleteCompany as apiDeleteCompany, bulkUpsertCompanies } from './store';
 import Header, { View } from './components/Header';
 import KanbanView from './components/KanbanView';
 import ListView from './components/ListView';
 import RejectedView from './components/RejectedView';
+import InvestedView from './components/InvestedView';
 import CompanyModal from './components/CompanyModal';
 import ImportModal from './components/ImportModal';
 import FilterBar, { FilterState, EMPTY_FILTERS, applyFilters } from './components/FilterBar';
@@ -192,11 +193,14 @@ export default function App() {
     persist(companies.map(c => c.id === id ? updated : c), updated);
   };
 
-  const activeCompanies = applyFilters(companies.filter(c => c.stage !== 'rejected'), filters);
+  // Active pipeline excludes rejected and invested — both have their own views.
+  const activeCompanies = applyFilters(
+    companies.filter(c => c.stage !== 'rejected' && c.stage !== 'invested'), filters);
   const rejectedCompanies = applyFilters(companies.filter(c => c.stage === 'rejected'), filters);
+  const investedCompanies = applyFilters(companies.filter(c => c.stage === 'invested'), filters);
 
   const counts: Record<string, number> = {};
-  for (const s of ACTIVE_STAGES) counts[s] = companies.filter(c => c.stage === s).length;
+  for (const s of BOARD_STAGES) counts[s] = companies.filter(c => c.stage === s).length;
 
   // Production: wait for the Microsoft identity check before rendering anything
   // (avoids briefly flashing stale/cached UI, and we redirect to sign-in if needed).
@@ -223,6 +227,7 @@ export default function App() {
         onImport={() => setShowImport(true)}
         counts={counts}
         rejectedCount={rejectedCompanies.length}
+        investedCount={investedCompanies.length}
         currentUser={currentUser}
         onChangeUser={() => setShowUserSetup(true)}
       />
@@ -235,6 +240,9 @@ export default function App() {
         )}
         {view === 'list' && (
           <ListView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} />
+        )}
+        {view === 'invested' && (
+          <InvestedView companies={investedCompanies} onSelect={setSelected} />
         )}
         {view === 'rejected' && (
           <RejectedView companies={rejectedCompanies} onSelect={setSelected} />

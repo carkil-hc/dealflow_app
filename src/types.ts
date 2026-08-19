@@ -162,6 +162,13 @@ export const ACTIVE_STAGES: Stage[] = [
   'new', 'first_meeting', 'due_diligence', 'terms_negotiation', 'invested', 'backburner',
 ];
 
+// Stages shown as columns on the board. Invested is a valid stage (still
+// selectable in the company modal) but has its own dedicated view, so it is
+// not a board column.
+export const BOARD_STAGES: Stage[] = [
+  'new', 'first_meeting', 'due_diligence', 'terms_negotiation', 'backburner',
+];
+
 export const PIPELINE_STAGES: Stage[] = [
   'new', 'first_meeting', 'due_diligence', 'terms_negotiation', 'invested',
 ];
