@@ -85,9 +85,14 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
             <span className="font-medium">{currentUser}</span>
           </button>
 
-          {/* Sign out */}
+          {/* Sign out — clear the cached identity, then end the Easy Auth session.
+              post_logout_redirect_uri returns the browser to the app instead of
+              leaving it stuck on the blank /.auth/logout page. */}
           <button
-            onClick={() => { window.location.href = '/.auth/logout'; }}
+            onClick={() => {
+              localStorage.removeItem('hc-current-user');
+              window.location.href = '/.auth/logout?post_logout_redirect_uri=/';
+            }}
             className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
             title="Sign out"
           >
