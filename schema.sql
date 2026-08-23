@@ -15,6 +15,7 @@ CREATE TABLE companies (
   funding_stage       NVARCHAR(100),
   ask_amount          NVARCHAR(100),
   valuation           NVARCHAR(100),
+  strategy            NVARCHAR(50),
   owner               NVARCHAR(200),
   backburner_reminder NVARCHAR(20),
   lead_contact        NVARCHAR(200),
@@ -23,8 +24,14 @@ CREATE TABLE companies (
   note_entries        NVARCHAR(MAX)  NOT NULL DEFAULT '[]',
   attachments         NVARCHAR(MAX)  NOT NULL DEFAULT '[]',
   history             NVARCHAR(MAX)  NOT NULL DEFAULT '[]',
+  dd_assessment       NVARCHAR(MAX),
   created_at          NVARCHAR(30)   NOT NULL,
   updated_at          NVARCHAR(30)   NOT NULL,
   rejected_reason     NVARCHAR(500),
   rejected_at         NVARCHAR(30)
 );
+
+-- ── Migrations for existing databases ────────────────────────────────────────
+-- Run whichever columns you don't already have:
+-- ALTER TABLE companies ADD strategy NVARCHAR(50) NULL;
+-- ALTER TABLE companies ADD dd_assessment NVARCHAR(MAX) NULL;

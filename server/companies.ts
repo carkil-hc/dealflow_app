@@ -29,6 +29,7 @@ export function rowToCompany(row: Record<string, any>) {
     noteEntries: JSON.parse(row.note_entries || '[]'),
     attachments: JSON.parse(row.attachments || '[]'),
     history: JSON.parse(row.history || '[]'),
+    ddAssessment: row.dd_assessment ? JSON.parse(row.dd_assessment) : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     rejectedReason: row.rejected_reason ?? undefined,
@@ -62,6 +63,7 @@ export async function upsertOne(pool: sql.ConnectionPool, c: any) {
     .input('note_entries', sql.NVarChar(sql.MAX), JSON.stringify(c.noteEntries ?? []))
     .input('attachments', sql.NVarChar(sql.MAX), JSON.stringify(c.attachments ?? []))
     .input('history', sql.NVarChar(sql.MAX), JSON.stringify(c.history ?? []))
+    .input('dd_assessment', sql.NVarChar(sql.MAX), c.ddAssessment ? JSON.stringify(c.ddAssessment) : null)
     .input('created_at', sql.NVarChar(30), c.createdAt)
     .input('updated_at', sql.NVarChar(30), c.updatedAt)
     .input('rejected_reason', sql.NVarChar(500), c.rejectedReason ?? null)
@@ -77,20 +79,20 @@ export async function upsertOne(pool: sql.ConnectionPool, c: any) {
         ask_amount=@ask_amount, valuation=@valuation, strategy=@strategy, owner=@owner,
         backburner_reminder=@backburner_reminder, lead_contact=@lead_contact,
         email=@email, phone=@phone, note_entries=@note_entries,
-        attachments=@attachments, history=@history,
+        attachments=@attachments, history=@history, dd_assessment=@dd_assessment,
         created_at=@created_at, updated_at=@updated_at,
         rejected_reason=@rejected_reason, rejected_at=@rejected_at
       WHEN NOT MATCHED THEN INSERT (
         id,name,description,stage,website,sector,location,
         therapeutic_area,development_stage,next_milestone,funding_stage,
         ask_amount,valuation,strategy,owner,backburner_reminder,lead_contact,
-        email,phone,note_entries,attachments,history,
+        email,phone,note_entries,attachments,history,dd_assessment,
         created_at,updated_at,rejected_reason,rejected_at
       ) VALUES (
         @id,@name,@description,@stage,@website,@sector,@location,
         @therapeutic_area,@development_stage,@next_milestone,@funding_stage,
         @ask_amount,@valuation,@strategy,@owner,@backburner_reminder,@lead_contact,
-        @email,@phone,@note_entries,@attachments,@history,
+        @email,@phone,@note_entries,@attachments,@history,@dd_assessment,
         @created_at,@updated_at,@rejected_reason,@rejected_at
       );
     `);

@@ -15,6 +15,7 @@ import HistoryLog from './companyModal/HistoryLog';
 import Placeholder from './companyModal/Placeholder';
 import CompanyTab from './companyModal/CompanyTab';
 import DealTab from './companyModal/DealTab';
+import DueDiligenceTab from './companyModal/DueDiligenceTab';
 import DDReportsTab from './companyModal/DDReportsTab';
 
 interface Props {
@@ -252,10 +253,11 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
             )}
 
             {tab === 'due_diligence' && (
-              <Placeholder
-                icon={<ClipboardCheck className="w-8 h-8" />}
-                title="Due diligence coming soon"
-                subtitle="Tools to manage the due diligence process will appear here"
+              <DueDiligenceTab
+                form={form}
+                setForm={setForm}
+                onAutoSave={onAutoSave}
+                currentUser={currentUser}
               />
             )}
 

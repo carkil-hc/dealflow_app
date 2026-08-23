@@ -45,6 +45,67 @@ export interface Attachment {
   data?: string;
 }
 
+// ── Due diligence ────────────────────────────────────────────────────────
+
+export type RiskLevel = 1 | 2 | 3 | 4 | 5;
+
+// A single sourced contribution to a risk category. Manual entries are
+// first-class; file/transcript entries (later phases) carry provenance and a
+// *suggested* risk level that a person confirms.
+export interface DDFinding {
+  id: string;
+  text: string;
+  source: 'manual' | 'file' | 'transcript';
+  sourceRef?: string;              // filename, meeting date, or author
+  riskLevelSuggested?: RiskLevel;  // AI proposal; never auto-committed
+  createdAt: string;
+  createdBy?: string;
+}
+
+export type DDStatus = 'not_started' | 'in_progress' | 'assessed';
+
+export interface DDRiskItem {
+  category: string;                // e.g. 'Target biology'
+  question: string;                // guiding question (stored for portability)
+  comments: string;                // working comment / synthesis
+  riskLevel: RiskLevel | null;     // committed 1–5 score (person decides)
+  status: DDStatus;
+  findings?: DDFinding[];          // sourced contributions (phase 2+)
+}
+
+export interface DDAssessment {
+  template: string;                // e.g. 'pharmaceutical'
+  items: DDRiskItem[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+// Pharmaceutical DD framework (from the HealthCap risk-assessment template).
+export const DD_PHARMA_TEMPLATE: { category: string; question: string }[] = [
+  { category: 'Target biology', question: 'Is the MoA relevant for the disease of interest?' },
+  { category: 'Translatability', question: 'Can results from preclinical models reliably be translated to clinical disease?' },
+  { category: 'PK / Biodistribution', question: 'Will the molecule reach the target in sufficient quantity?' },
+  { category: 'Toxicology', question: 'Is the molecule safe and are there specific tolerability questions?' },
+  { category: 'CMC', question: 'Is manufacturing feasible at relevant clinical scale?' },
+  { category: 'Clinical development / Regulatory', question: 'Is it possible to prove the TPP in a realistic time, recruit patients, and establish a dosing regimen? Is there a clear regulatory path (endpoints etc)?' },
+  { category: 'Commercial', question: 'Market size? Differentiation?' },
+  { category: 'Intellectual property', question: 'Is there IP to allow adequate protection from competition?' },
+  { category: 'Main differentiator', question: 'What aspect in the technology/target will be the main differentiator to competitors?' },
+];
+
+// Which template applies to a company (by sector). Returns null if none yet.
+export function ddTemplateFor(sector: string | undefined): { id: string; items: { category: string; question: string }[] } | null {
+  if (sector === 'Pharmaceutical') return { id: 'pharmaceutical', items: DD_PHARMA_TEMPLATE };
+  return null;
+}
+
+// Derive a risk item's status from its content.
+export function ddItemStatus(item: Pick<DDRiskItem, 'comments' | 'riskLevel'>): DDStatus {
+  if (item.riskLevel != null) return 'assessed';
+  if (item.comments.trim()) return 'in_progress';
+  return 'not_started';
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -75,6 +136,7 @@ export interface Company {
   noteEntries: NoteEntry[];
   attachments: Attachment[];
   history: HistoryEntry[];
+  ddAssessment?: DDAssessment;
   // Meta
   createdAt: string;
   updatedAt: string;
