@@ -1,10 +1,12 @@
 import { Dispatch, SetStateAction, useState } from 'react';
-import { ClipboardCheck, ChevronRight } from 'lucide-react';
+import { ClipboardCheck, ChevronRight, FileText, Loader2 } from 'lucide-react';
 import {
   Company, DDAssessment, DDRiskItem, RiskLevel,
   ddTemplateFor, ddItemStatus,
 } from '../../types';
 import Placeholder from './Placeholder';
+import { addHistory } from './helpers';
+import DDDeckModal, { Deck } from './DDDeckModal';
 
 interface Props {
   form: Company;
@@ -54,6 +56,39 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
   const expandAll = () => setExpanded(new Set(items.map((_, i) => i)));
   const collapseAll = () => setExpanded(new Set());
 
+  // PPTX generation
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const [genScope, setGenScope] = useState<string | null>(null); // 'all' | category
+  const [genErr, setGenErr] = useState('');
+
+  const generate = async (dimension?: string) => {
+    setGenScope(dimension ?? 'all');
+    setGenErr('');
+    try {
+      const res = await fetch(`/api/companies/${form.id}/dd/pptx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dimension ? { dimension } : {}),
+      });
+      if (!res.ok) throw new Error('generation failed');
+      const data: Deck = await res.json();
+      setDeck(data);
+      // The combined summary is a deliverable — save it to the Files tab too.
+      if (!dimension) {
+        const now = new Date().toISOString();
+        let updated: Company = { ...form, attachments: [...form.attachments, data.attachment] };
+        updated = addHistory(updated, { type: 'file_added', timestamp: now, user: currentUser, detail: data.attachment.name });
+        updated = { ...updated, updatedAt: now };
+        setForm(updated);
+        onAutoSave(updated);
+      }
+    } catch {
+      setGenErr('Could not generate the presentation. Make sure the company is saved, then try again.');
+    } finally {
+      setGenScope(null);
+    }
+  };
+
   if (!template) {
     return (
       <Placeholder
@@ -100,18 +135,30 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
               {highRisk > 0 && <> · <span className="text-red-600 font-medium">{highRisk} high-risk</span></>}
             </div>
           </div>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-sm ${
-            overall === 'Complete' ? 'bg-[#E0F0F5] text-[#005B6E]'
-            : overall === 'In progress' ? 'bg-amber-50 text-amber-700'
-            : 'bg-gray-100 text-gray-500'
-          }`}>
-            {overall}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-sm ${
+              overall === 'Complete' ? 'bg-[#E0F0F5] text-[#005B6E]'
+              : overall === 'In progress' ? 'bg-amber-50 text-amber-700'
+              : 'bg-gray-100 text-gray-500'
+            }`}>
+              {overall}
+            </span>
+            <button
+              onClick={() => generate()}
+              disabled={genScope !== null}
+              className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+            >
+              {genScope === 'all'
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>
+                : <><FileText className="w-3 h-3" /> Generate DD summary</>}
+            </button>
+          </div>
         </div>
         {/* progress bar */}
         <div className="mt-2.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-[#005B6E] transition-all" style={{ width: `${pct}%` }} />
         </div>
+        {genErr && <p className="text-xs text-red-500 mt-2">{genErr}</p>}
       </div>
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-gray-400">
@@ -174,6 +221,17 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                   placeholder="Findings, open questions, notes…"
                   className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white resize-y rounded-sm"
                 />
+                <div className="flex justify-end mt-2">
+                  <button
+                    onClick={() => generate(item.category)}
+                    disabled={genScope !== null}
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#005B6E] disabled:text-gray-300 px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
+                  >
+                    {genScope === item.category
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>
+                      : <><FileText className="w-3 h-3" /> Generate slides</>}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -183,6 +241,8 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
       <p className="text-[11px] text-gray-400">
         Changes save automatically. File- and meeting-sourced findings will appear here in later phases.
       </p>
+
+      {deck && <DDDeckModal deck={deck} onClose={() => setDeck(null)} />}
     </div>
   );
 }

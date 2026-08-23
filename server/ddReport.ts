@@ -1,0 +1,282 @@
+import { Router } from 'express';
+import { createRequire } from 'node:module';
+import sql from 'mssql';
+import type PptxGenJS from 'pptxgenjs';
+import { getPool } from './db.js';
+import { anthropic } from './anthropic.js';
+import { rowToCompany } from './companies.js';
+
+// pptxgenjs ships an ESM build older Node parses as CJS; load the CJS build.
+const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
+
+// ── Palette (shared HealthCap look) ──────────────────────────────────────────
+const TEAL = '005B6E';
+const WHITE = 'FFFFFF';
+const DARK = '1A1A1A';
+const LIGHT_TEAL = 'E0F0F5';
+const GRAY = 'F5F5F5';
+const MID_GRAY = '9CA3AF';
+
+const RISK_COLOR: Record<number, string> = { 1: '16A34A', 2: '059669', 3: 'F59E0B', 4: 'EA580C', 5: 'DC2626' };
+const RISK_LABEL: Record<number, string> = { 1: 'Low', 2: 'Low–Medium', 3: 'Medium', 4: 'High', 5: 'Very High' };
+
+// ── Content shapes ───────────────────────────────────────────────────────────
+interface DimContent {
+  category: string;
+  question: string;
+  riskLevel: number | null;
+  hasData: boolean;
+  summary: string;
+  mainFindings: string[];
+  detail: { heading: string; body: string }[];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Slide = any;
+
+function footer(pptx: PptxGenJS, slide: Slide) {
+  slide.addShape(pptx.ShapeType.line, { x: 0.4, y: 7.15, w: 12.53, h: 0, line: { color: LIGHT_TEAL, width: 1 } });
+  slide.addText('HealthCap — Confidential', { x: 0.4, y: 7.2, w: 12.5, h: 0.25, fontSize: 8, color: MID_GRAY, fontFace: 'Calibri' });
+}
+
+function headerBar(pptx: PptxGenJS, slide: Slide, title: string, companyName: string) {
+  slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: TEAL }, line: { color: TEAL, width: 0 } });
+  slide.addText(title, { x: 0.4, y: 0.15, w: 9.2, h: 0.7, fontSize: 20, bold: true, color: WHITE, fontFace: 'Calibri', valign: 'middle' });
+  slide.addText(companyName, { x: 9.6, y: 0.2, w: 3.4, h: 0.6, fontSize: 12, color: LIGHT_TEAL, fontFace: 'Calibri', align: 'right', valign: 'middle' });
+}
+
+function riskBadge(pptx: PptxGenJS, slide: Slide, level: number | null, x: number, y: number) {
+  const color = level ? RISK_COLOR[level] : '9CA3AF';
+  const label = level ? `RISK ${level} / 5 · ${RISK_LABEL[level]}` : 'NOT ASSESSED';
+  slide.addShape(pptx.ShapeType.roundRect, { x, y, w: 3.2, h: 0.5, rectRadius: 0.05, fill: { color }, line: { color, width: 0 } });
+  slide.addText(label, { x, y, w: 3.2, h: 0.5, fontSize: 12, bold: true, color: WHITE, fontFace: 'Calibri', align: 'center', valign: 'middle' });
+}
+
+// Add a dimension's slides (summary + up to 3 detail) — max 4, no cover slide.
+function addDimensionSlides(pptx: PptxGenJS, companyName: string, dim: DimContent) {
+  // ── Summary slide ──
+  const s = pptx.addSlide();
+  s.background = { color: WHITE };
+  headerBar(pptx, s, dim.category, companyName);
+  s.addText(dim.question, { x: 0.4, y: 1.15, w: 12.5, h: 0.5, fontSize: 12, italic: true, color: MID_GRAY, fontFace: 'Calibri', valign: 'top' });
+
+  if (!dim.hasData) {
+    s.addText('No data yet — add or edit data in the app.', {
+      x: 0.4, y: 2.8, w: 12.5, h: 1.2, fontSize: 20, bold: true, color: MID_GRAY, fontFace: 'Calibri', align: 'center',
+    });
+    footer(pptx, s);
+    return;
+  }
+
+  riskBadge(pptx, s, dim.riskLevel, 0.4, 1.75);
+
+  if (dim.summary) {
+    s.addText(dim.summary, { x: 0.4, y: 2.45, w: 12.5, h: 1.3, fontSize: 14, color: DARK, fontFace: 'Calibri', valign: 'top', wrap: true });
+  }
+
+  if (dim.mainFindings.length) {
+    s.addText('Main findings', { x: 0.4, y: 3.75, w: 12.5, h: 0.35, fontSize: 13, bold: true, color: TEAL, fontFace: 'Calibri' });
+    s.addText(
+      dim.mainFindings.slice(0, 6).map(t => ({ text: t, options: { bullet: { indent: 12 }, paraSpaceAfter: 6 } })),
+      { x: 0.4, y: 4.15, w: 12.5, h: 2.85, fontSize: 13, color: DARK, fontFace: 'Calibri', valign: 'top', wrap: true },
+    );
+  }
+  footer(pptx, s);
+
+  // ── Detail slides (max 3) ──
+  for (const section of dim.detail.slice(0, 3)) {
+    const d = pptx.addSlide();
+    d.background = { color: WHITE };
+    headerBar(pptx, d, `${dim.category} — detail`, companyName);
+    d.addText(section.heading, { x: 0.4, y: 1.2, w: 12.5, h: 0.5, fontSize: 15, bold: true, color: TEAL, fontFace: 'Calibri' });
+    d.addText(section.body, { x: 0.4, y: 1.8, w: 12.5, h: 5.2, fontSize: 13, color: DARK, fontFace: 'Calibri', valign: 'top', wrap: true });
+    footer(pptx, d);
+  }
+}
+
+async function pptxBase64(pptx: PptxGenJS): Promise<string> {
+  return (await pptx.write({ outputType: 'base64' })) as string;
+}
+
+// Single-dimension deck (summary slide first, no cover).
+export async function buildDimensionDeck(companyName: string, dim: DimContent): Promise<string> {
+  const pptx = new PptxGenJSCtor();
+  pptx.layout = 'LAYOUT_WIDE';
+  addDimensionSlides(pptx, companyName, dim);
+  return pptxBase64(pptx);
+}
+
+// Combined deck: cover + overview table + every dimension's slides.
+export async function buildCombinedDeck(companyName: string, dims: DimContent[]): Promise<string> {
+  const pptx = new PptxGenJSCtor();
+  pptx.layout = 'LAYOUT_WIDE';
+
+  // Cover
+  {
+    const c = pptx.addSlide();
+    c.background = { color: TEAL };
+    c.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.08, h: 7.5, fill: { color: WHITE }, line: { color: WHITE, width: 0 } });
+    c.addText('HealthCap', { x: 0.3, y: 0.35, w: 3, h: 0.4, fontSize: 14, bold: true, color: WHITE, fontFace: 'Calibri' });
+    c.addText('DUE DILIGENCE SUMMARY', { x: 0.3, y: 1.6, w: 12.7, h: 0.7, fontSize: 34, bold: true, color: WHITE, fontFace: 'Calibri' });
+    c.addText(companyName, { x: 0.3, y: 2.4, w: 12.7, h: 0.7, fontSize: 26, color: LIGHT_TEAL, fontFace: 'Calibri' });
+    c.addText(`Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+      { x: 0.3, y: 6.9, w: 12.7, h: 0.35, fontSize: 10, color: LIGHT_TEAL, fontFace: 'Calibri' });
+  }
+
+  // Overview table
+  {
+    const o = pptx.addSlide();
+    o.background = { color: WHITE };
+    headerBar(pptx, o, 'Risk Overview', companyName);
+    const rows: PptxGenJS.TableRow[] = [
+      ['#', 'Dimension', 'Risk level'].map(h => ({
+        text: h, options: { bold: true, color: WHITE, fill: { color: TEAL }, fontSize: 11, fontFace: 'Calibri', valign: 'middle' as const },
+      })),
+      ...dims.map((d, i) => ([
+        { text: String(i + 1), options: { fontSize: 11, color: DARK, fontFace: 'Calibri', align: 'center' as const, fill: { color: i % 2 ? GRAY : WHITE } } },
+        { text: d.category, options: { fontSize: 11, color: DARK, fontFace: 'Calibri', fill: { color: i % 2 ? GRAY : WHITE } } },
+        {
+          text: d.riskLevel ? `${d.riskLevel} / 5 · ${RISK_LABEL[d.riskLevel]}` : 'Not assessed',
+          options: { fontSize: 11, bold: !!d.riskLevel, color: d.riskLevel ? RISK_COLOR[d.riskLevel] : MID_GRAY, fontFace: 'Calibri', fill: { color: i % 2 ? GRAY : WHITE } },
+        },
+      ])),
+    ];
+    o.addTable(rows, { x: 0.4, y: 1.2, w: 12.53, colW: [0.8, 8.0, 3.73], rowH: 0.45, border: { type: 'solid', color: LIGHT_TEAL, pt: 0.5 } });
+    footer(pptx, o);
+  }
+
+  for (const dim of dims) addDimensionSlides(pptx, companyName, dim);
+  return pptxBase64(pptx);
+}
+
+// ── Claude synthesis ─────────────────────────────────────────────────────────
+// For dimensions that have data, turn raw comments/findings into a summary,
+// main findings, and up to 3 detail sections. Returns a map keyed by category.
+async function synthesize(
+  companyName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  items: any[],
+): Promise<Record<string, { summary: string; mainFindings: string[]; detail: { heading: string; body: string }[] }>> {
+  if (items.length === 0) return {};
+
+  const payload = items.map(it => ({
+    category: it.category,
+    question: it.question,
+    riskLevel: it.riskLevel,
+    comments: it.comments || '',
+    findings: (it.findings || []).map((f: { text: string; sourceRef?: string }) => ({ text: f.text, source: f.sourceRef })),
+  }));
+
+  const prompt = `You are a life-science venture capital analyst at HealthCap preparing a due diligence deck for ${companyName}.
+
+For each due-diligence dimension below, turn the raw notes into concise slide content. Return ONLY a valid JSON object keyed by the exact category name, each value:
+{
+  "summary": "1-2 sentence synthesis of the current assessment for this dimension",
+  "mainFindings": ["3-5 short bullet points of the key findings / open questions"],
+  "detail": [{"heading": "short heading", "body": "a paragraph of the underlying detail"}]
+}
+Rules:
+- Base everything ONLY on the provided notes; do not invent facts. If notes are thin, keep it brief and say what is missing.
+- At most 3 detail sections per dimension (they become slides). Keep each body under ~120 words.
+- Do not restate the risk level number.
+
+Dimensions:
+${JSON.stringify(payload, null, 2)}`;
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 4000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const textBlock = message.content.find(b => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
+  const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('No JSON in Claude response');
+  return JSON.parse(jsonMatch[0]);
+}
+
+// ── Route ────────────────────────────────────────────────────────────────────
+export const ddReportRouter = Router();
+
+const PHARMA = [
+  { category: 'Target biology', question: 'Is the MoA relevant for the disease of interest?' },
+  { category: 'Translatability', question: 'Can results from preclinical models reliably be translated to clinical disease?' },
+  { category: 'PK / Biodistribution', question: 'Will the molecule reach the target in sufficient quantity?' },
+  { category: 'Toxicology', question: 'Is the molecule safe and are there specific tolerability questions?' },
+  { category: 'CMC', question: 'Is manufacturing feasible at relevant clinical scale?' },
+  { category: 'Clinical development / Regulatory', question: 'Is it possible to prove the TPP in a realistic time, recruit patients, and establish a dosing regimen? Is there a clear regulatory path (endpoints etc)?' },
+  { category: 'Commercial', question: 'Market size? Differentiation?' },
+  { category: 'Intellectual property', question: 'Is there IP to allow adequate protection from competition?' },
+  { category: 'Main differentiator', question: 'What aspect in the technology/target will be the main differentiator to competitors?' },
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasData(item: any): boolean {
+  return !!(item && ((item.comments && item.comments.trim()) || item.riskLevel != null || (item.findings && item.findings.length)));
+}
+
+// POST /api/companies/:id/dd/pptx  — body { dimension?: string }
+// No dimension → combined deck; a dimension category → that single deck.
+ddReportRouter.post('/api/companies/:id/dd/pptx', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().input('id', sql.NVarChar(50), req.params.id).query('SELECT * FROM companies WHERE id = @id');
+    if (result.recordset.length === 0) { res.status(404).json({ error: 'Company not found' }); return; }
+    const c = rowToCompany(result.recordset[0]);
+
+    // Merge stored assessment onto the template so every dimension exists.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stored = new Map<string, any>((c.ddAssessment?.items ?? []).map((i: any) => [i.category, i]));
+    const merged = PHARMA.map(t => {
+      const e = stored.get(t.category);
+      return { category: t.category, question: t.question, comments: e?.comments ?? '', riskLevel: e?.riskLevel ?? null, findings: e?.findings ?? [] };
+    });
+
+    const single: string | undefined = req.body?.dimension;
+    const scope = single ? merged.filter(m => m.category === single) : merged;
+    if (single && scope.length === 0) { res.status(400).json({ error: `Unknown dimension: ${single}` }); return; }
+
+    const synths = await synthesize(c.name, scope.filter(hasData));
+
+    const content: DimContent[] = scope.map(m => {
+      const has = hasData(m);
+      const syn = synths[m.category];
+      return {
+        category: m.category,
+        question: m.question,
+        riskLevel: m.riskLevel,
+        hasData: has,
+        summary: has ? (syn?.summary ?? m.comments) : '',
+        mainFindings: has ? (syn?.mainFindings ?? []) : [],
+        detail: has ? (syn?.detail ?? (m.comments ? [{ heading: 'Notes', body: m.comments }] : [])) : [],
+      };
+    });
+
+    const now = new Date().toISOString();
+    let data: string, name: string;
+    if (single) {
+      data = await buildDimensionDeck(c.name, content[0]);
+      name = `${c.name.replace(/[^a-z0-9 _-]/gi, '_')} — ${single.replace(/[^a-z0-9 _-]/gi, '_')}.pptx`;
+    } else {
+      data = await buildCombinedDeck(c.name, content);
+      name = `${c.name.replace(/[^a-z0-9 _-]/gi, '_')} — Due Diligence Summary.pptx`;
+    }
+
+    const bytes = Buffer.from(data, 'base64');
+    const attachment = {
+      id: `${Date.now()}-dd`,
+      name,
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      size: bytes.length,
+      uploadedAt: now,
+      data,
+    };
+
+    res.json({ attachment, preview: { combined: !single, dimensions: content } });
+  } catch (err) {
+    console.error('[dd pptx]', err);
+    res.status(500).json({ error: 'Failed to generate DD presentation', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
