@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useState } from 'react';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, ChevronRight } from 'lucide-react';
 import {
   Company, DDAssessment, DDRiskItem, RiskLevel,
   ddTemplateFor, ddItemStatus,
@@ -43,6 +43,16 @@ function buildItems(form: Company, templateItems: { category: string; question: 
 export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser }: Props) {
   const template = ddTemplateFor(form.sector);
   const [items, setItems] = useState<DDRiskItem[]>(() => (template ? buildItems(form, template.items) : []));
+  // Collapsed by default so the tab reads as a summary log; expand to see detail.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggle = (idx: number) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  const expandAll = () => setExpanded(new Set(items.map((_, i) => i)));
+  const collapseAll = () => setExpanded(new Set());
 
   if (!template) {
     return (
@@ -104,55 +114,71 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 text-[11px] text-gray-400">
-        <span>Risk level:</span>
-        <span className="text-green-700 font-medium">1 low</span>
-        <span>→</span>
-        <span className="text-red-700 font-medium">5 high</span>
+      <div className="flex items-center justify-between gap-2 text-[11px] text-gray-400">
+        <div className="flex items-center gap-2">
+          <button onClick={expandAll} className="hover:text-[#005B6E] transition-colors">Expand all</button>
+          <span className="text-gray-300">·</span>
+          <button onClick={collapseAll} className="hover:text-[#005B6E] transition-colors">Collapse all</button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Risk level:</span>
+          <span className="text-green-700 font-medium">1 low</span>
+          <span>→</span>
+          <span className="text-red-700 font-medium">5 high</span>
+        </div>
       </div>
 
       {/* Risk items */}
-      {items.map((item, idx) => (
-        <div key={item.category} className="border border-gray-200 bg-white rounded-sm">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+      {items.map((item, idx) => {
+        const isOpen = expanded.has(idx);
+        return (
+          <div key={item.category} className="border border-gray-200 bg-white rounded-sm">
+            <div className={`px-4 py-3 flex items-center justify-between gap-4 ${isOpen ? 'border-b border-gray-100' : ''}`}>
+              {/* Clickable title area toggles the card */}
+              <button
+                type="button"
+                onClick={() => toggle(idx)}
+                className="flex items-center gap-2 min-w-0 flex-1 text-left"
+              >
+                <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status]}`} />
-                <span className="text-sm font-semibold text-[#1A1A1A]">{idx + 1}. {item.category}</span>
+                <span className="text-sm font-semibold text-[#1A1A1A] truncate">{idx + 1}. {item.category}</span>
+              </button>
+              {/* Risk level 1–5 — always visible and clickable, collapsed or not */}
+              <div className="flex items-center gap-1 shrink-0">
+                {([1, 2, 3, 4, 5] as RiskLevel[]).map(level => {
+                  const selected = item.riskLevel === level;
+                  const s = RISK_STYLES[level];
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setRisk(idx, level)}
+                      title={selected ? 'Click to clear' : `Set risk level ${level}`}
+                      className={`w-7 h-7 text-xs font-semibold border transition-colors rounded-sm ${selected ? s.on : `bg-white ${s.off}`}`}
+                    >
+                      {level}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">{item.question}</div>
             </div>
-            {/* Risk level 1–5 */}
-            <div className="flex items-center gap-1 shrink-0">
-              {([1, 2, 3, 4, 5] as RiskLevel[]).map(level => {
-                const selected = item.riskLevel === level;
-                const s = RISK_STYLES[level];
-                return (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setRisk(idx, level)}
-                    title={selected ? 'Click to clear' : `Set risk level ${level}`}
-                    className={`w-7 h-7 text-xs font-semibold border transition-colors rounded-sm ${selected ? s.on : `bg-white ${s.off}`}`}
-                  >
-                    {level}
-                  </button>
-                );
-              })}
-            </div>
+            {isOpen && (
+              <div className="px-4 py-3">
+                <div className="text-xs text-gray-400 mb-2">{item.question}</div>
+                <textarea
+                  value={item.comments}
+                  onChange={e => editComment(idx, e.target.value)}
+                  onBlur={commitComment}
+                  rows={3}
+                  placeholder="Findings, open questions, notes…"
+                  className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white resize-y rounded-sm"
+                />
+              </div>
+            )}
           </div>
-          <div className="px-4 py-3">
-            <textarea
-              value={item.comments}
-              onChange={e => editComment(idx, e.target.value)}
-              onBlur={commitComment}
-              rows={2}
-              placeholder="Findings, open questions, notes…"
-              className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white resize-y rounded-sm"
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       <p className="text-[11px] text-gray-400">
         Changes save automatically. File- and meeting-sourced findings will appear here in later phases.
