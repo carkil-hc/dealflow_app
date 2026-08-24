@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createRequire } from 'node:module';
 import sql from 'mssql';
+import Anthropic from '@anthropic-ai/sdk';
 import type PptxGenJS from 'pptxgenjs';
 import { getPool } from './db.js';
 import { anthropic } from './anthropic.js';
@@ -216,6 +217,94 @@ const PHARMA = [
 function hasData(item: any): boolean {
   return !!(item && ((item.comments && item.comments.trim()) || item.riskLevel != null || (item.findings && item.findings.length)));
 }
+
+const CATEGORY_NAMES = PHARMA.map(p => p.category);
+
+// POST /api/companies/:id/dd/analyze-files
+// Reads the company's PDF/image attachments and drafts DD findings per category
+// (proposals — risk levels are only *suggested*, never committed). Returns the
+// findings; the client merges and persists them.
+ddReportRouter.post('/api/companies/:id/dd/analyze-files', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().input('id', sql.NVarChar(50), req.params.id).query('SELECT * FROM companies WHERE id = @id');
+    if (result.recordset.length === 0) { res.status(404).json({ error: 'Company not found' }); return; }
+    const c = rowToCompany(result.recordset[0]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const atts: any[] = (c.attachments ?? []).filter((a: any) => a && a.data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfs = atts.filter((a: any) => a.type === 'application/pdf');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const images = atts.filter((a: any) => typeof a.type === 'string' && a.type.startsWith('image/'));
+
+    if (pdfs.length === 0 && images.length === 0) {
+      res.status(400).json({ error: 'No PDF or image files to analyze. Upload DD materials to the Files tab first.' });
+      return;
+    }
+
+    // Cap total document payload (~20MB of base64) to stay within API limits.
+    const CAP = 20 * 1024 * 1024;
+    const content: Anthropic.MessageParam['content'] = [];
+    const included: string[] = [];
+    let used = 0;
+    for (const a of [...pdfs, ...images]) {
+      if (used + a.data.length > CAP) continue;
+      used += a.data.length;
+      included.push(a.name);
+      if (a.type === 'application/pdf') {
+        content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.data }, title: a.name } as Anthropic.DocumentBlockParam);
+      } else {
+        content.push({ type: 'image', source: { type: 'base64', media_type: a.type, data: a.data } } as Anthropic.ImageBlockParam);
+      }
+    }
+
+    content.push({
+      type: 'text',
+      text: `You are a life-science VC analyst at HealthCap doing due diligence on ${c.name}${c.therapeuticArea ? ` (${c.therapeuticArea})` : ''}.
+
+Read the attached document(s) [${included.join(', ')}] and extract due-diligence findings, mapped to this fixed framework. Return ONLY a valid JSON array. Each element:
+{
+  "category": "EXACTLY one of: ${CATEGORY_NAMES.join(' | ')}",
+  "text": "a concise, specific finding grounded in the documents (1-2 sentences)",
+  "sourceRef": "which document it came from",
+  "riskLevelSuggested": 1-5 (1 = low risk / strong, 5 = high risk / weak; omit if you cannot judge)
+}
+
+Rules:
+- Base every finding ONLY on the documents. Do NOT invent facts. If the documents say nothing about a category, produce no finding for it.
+- Multiple findings per category are fine. Keep each finding sharp and evidence-based.
+- riskLevelSuggested is a suggestion only.`,
+    });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content }],
+    });
+    const textBlock = message.content.find(b => b.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
+    const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('No JSON array in Claude response');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw: any[] = JSON.parse(jsonMatch[0]);
+
+    // Keep only findings whose category matches the framework.
+    const findings = raw
+      .filter(f => f && CATEGORY_NAMES.includes(f.category) && typeof f.text === 'string' && f.text.trim())
+      .map(f => ({
+        category: f.category,
+        text: String(f.text).trim(),
+        sourceRef: typeof f.sourceRef === 'string' ? f.sourceRef : (included[0] ?? 'file'),
+        riskLevelSuggested: [1, 2, 3, 4, 5].includes(f.riskLevelSuggested) ? f.riskLevelSuggested : undefined,
+      }));
+
+    res.json({ findings, analyzedFiles: included });
+  } catch (err) {
+    console.error('[dd analyze-files]', err);
+    res.status(500).json({ error: 'Failed to analyze files', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 // POST /api/companies/:id/dd/pptx  — body { dimension?: string }
 // No dimension → combined deck; a dimension category → that single deck.

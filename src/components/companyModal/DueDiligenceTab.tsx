@@ -1,8 +1,8 @@
 import { Dispatch, SetStateAction, useState } from 'react';
-import { ClipboardCheck, ChevronRight, FileText, Loader2 } from 'lucide-react';
+import { ClipboardCheck, ChevronRight, FileText, Loader2, Sparkles } from 'lucide-react';
 import {
-  Company, DDAssessment, DDRiskItem, RiskLevel,
-  ddTemplateFor, ddItemStatus,
+  Company, DDAssessment, DDRiskItem, DDFinding, RiskLevel,
+  ddTemplateFor, ddItemStatus, uid,
 } from '../../types';
 import Placeholder from './Placeholder';
 import { addHistory } from './helpers';
@@ -118,6 +118,53 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
   const setRisk = (idx: number, level: RiskLevel) =>
     commit(items.map((it, i) => (i === idx ? { ...it, riskLevel: it.riskLevel === level ? null : level } : it)));
 
+  // ── File analysis (phase 2): draft findings from the company's attachments ──
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const analyze = async () => {
+    setAnalyzing(true);
+    setGenErr('');
+    try {
+      const res = await fetch(`/api/companies/${form.id}/dd/analyze-files`, { method: 'POST' });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || 'Analysis failed');
+      }
+      const { findings } = await res.json() as { findings: { category: string; text: string; sourceRef: string; riskLevelSuggested?: RiskLevel }[] };
+      const now = new Date().toISOString();
+      const byCat = new Map<string, DDFinding[]>();
+      for (const f of findings) {
+        const df: DDFinding = { id: uid(), text: f.text, source: 'file', sourceRef: f.sourceRef, riskLevelSuggested: f.riskLevelSuggested, createdAt: now, createdBy: currentUser };
+        byCat.set(f.category, [...(byCat.get(f.category) ?? []), df]);
+      }
+      // Replace previous file-sourced findings; keep any from other sources.
+      const next = items.map(it => {
+        const kept = (it.findings ?? []).filter(x => x.source !== 'file');
+        return { ...it, findings: [...kept, ...(byCat.get(it.category) ?? [])] };
+      });
+      commit(next);
+      // Expand cards that received findings so the proposals are visible.
+      setExpanded(prev => {
+        const n = new Set(prev);
+        items.forEach((it, i) => { if ((byCat.get(it.category)?.length ?? 0) > 0) n.add(i); });
+        return n;
+      });
+      if (findings.length === 0) setGenErr('No findings could be extracted from the attached files.');
+    } catch (e) {
+      setGenErr(e instanceof Error ? e.message : 'Could not analyze files.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  // Finding actions (per card)
+  const applySuggested = (idx: number, level: RiskLevel) =>
+    commit(items.map((it, i) => (i === idx ? { ...it, riskLevel: level } : it)));
+  const addToNotes = (idx: number, text: string) =>
+    commit(items.map((it, i) => (i === idx ? { ...it, comments: it.comments ? `${it.comments}\n${text}` : text } : it)));
+  const dismissFinding = (idx: number, fid: string) =>
+    commit(items.map((it, i) => (i === idx ? { ...it, findings: (it.findings ?? []).filter(f => f.id !== fid) } : it)));
+
   const assessed = items.filter(i => i.riskLevel != null).length;
   const highRisk = items.filter(i => i.riskLevel != null && i.riskLevel >= 4).length;
   const overall = assessed === 0 ? 'Not started' : assessed === items.length ? 'Complete' : 'In progress';
@@ -144,8 +191,18 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
               {overall}
             </span>
             <button
+              onClick={analyze}
+              disabled={analyzing || genScope !== null}
+              title="Draft findings from the files in the Files tab"
+              className="flex items-center gap-1.5 border border-[#005B6E] text-[#005B6E] hover:bg-[#E0F0F5] disabled:border-gray-200 disabled:text-gray-400 text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+            >
+              {analyzing
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Analyzing…</>
+                : <><Sparkles className="w-3 h-3" /> Analyze DD files</>}
+            </button>
+            <button
               onClick={() => generate()}
-              disabled={genScope !== null}
+              disabled={genScope !== null || analyzing}
               className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
             >
               {genScope === 'all'
@@ -221,6 +278,54 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                   placeholder="Findings, open questions, notes…"
                   className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white resize-y rounded-sm"
                 />
+                {/* AI-suggested findings from files (phase 2) */}
+                {(item.findings ?? []).length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-[#005B6E]" /> Suggested findings
+                    </div>
+                    {(item.findings ?? []).map(f => (
+                      <div key={f.id} className="border border-gray-100 bg-gray-50 px-3 py-2 rounded-sm">
+                        <p className="text-sm text-gray-700">{f.text}</p>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {f.sourceRef && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-500 bg-white border border-gray-200 px-1.5 py-0.5 rounded-sm">
+                              <FileText className="w-3 h-3" /> {f.sourceRef}
+                            </span>
+                          )}
+                          {f.riskLevelSuggested && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 border bg-white rounded-sm ${RISK_STYLES[f.riskLevelSuggested].off}`}>
+                              suggests {f.riskLevelSuggested}
+                            </span>
+                          )}
+                          <div className="ml-auto flex items-center gap-1">
+                            {f.riskLevelSuggested && (
+                              <button
+                                onClick={() => applySuggested(idx, f.riskLevelSuggested as RiskLevel)}
+                                className="text-[11px] text-[#005B6E] hover:bg-[#E0F0F5] px-2 py-0.5 transition-colors rounded-sm"
+                              >
+                                Apply risk
+                              </button>
+                            )}
+                            <button
+                              onClick={() => addToNotes(idx, f.text)}
+                              className="text-[11px] text-gray-500 hover:text-[#005B6E] hover:bg-[#E0F0F5] px-2 py-0.5 transition-colors rounded-sm"
+                            >
+                              Add to notes
+                            </button>
+                            <button
+                              onClick={() => dismissFinding(idx, f.id)}
+                              className="text-[11px] text-gray-400 hover:text-red-500 hover:bg-red-50 px-2 py-0.5 transition-colors rounded-sm"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex justify-end mt-2">
                   <button
                     onClick={() => generate(item.category)}
