@@ -37,17 +37,6 @@ export function rowToCompany(row: Record<string, any>) {
   };
 }
 
-// Strip the heavy base64 file blobs from attachments, keeping metadata.
-// Used for the list endpoint so the payload stays small.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripAttachmentData(c: any) {
-  return {
-    ...c,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    attachments: (c.attachments ?? []).map(({ data, ...rest }: any) => rest),
-  };
-}
-
 // Insert or update one company (MERGE on id).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function upsertOne(pool: sql.ConnectionPool, c: any) {
@@ -131,14 +120,36 @@ export async function upsertOne(pool: sql.ConnectionPool, c: any) {
 
 export const companiesRouter = Router();
 
-// GET all companies — lightweight: attachment file blobs are stripped so the
-// payload stays small. The full record (with blobs) is fetched per company.
+// GET all companies — lightweight. The heavy base64 attachment blobs are
+// stripped IN SQL (via OPENJSON) so they never even leave the database; only
+// attachment metadata (id/name/type/size/uploadedAt) is returned. The full
+// record with blobs is fetched per company on demand.
+const LIST_QUERY = `
+  SELECT
+    id, name, description, stage, website, sector, location, therapeutic_area,
+    development_stage, next_milestone, funding_stage, ask_amount, valuation,
+    strategy, owner, backburner_reminder, lead_contact, email, phone,
+    note_entries, history, dd_assessment, created_at, updated_at,
+    rejected_reason, rejected_at,
+    (
+      SELECT id, name, type, size, uploadedAt
+      FROM OPENJSON(attachments) WITH (
+        id nvarchar(100) '$.id',
+        name nvarchar(500) '$.name',
+        type nvarchar(200) '$.type',
+        size bigint '$.size',
+        uploadedAt nvarchar(40) '$.uploadedAt'
+      )
+      FOR JSON PATH
+    ) AS attachments
+  FROM companies
+  ORDER BY created_at DESC`;
+
 companiesRouter.get('/api/companies', async (_req, res) => {
   try {
     const pool = await getPool();
-    const result = await pool.request()
-      .query('SELECT * FROM companies ORDER BY created_at DESC');
-    res.json(result.recordset.map(rowToCompany).map(stripAttachmentData));
+    const result = await pool.request().query(LIST_QUERY);
+    res.json(result.recordset.map(rowToCompany));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch companies' });
