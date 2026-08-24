@@ -24,12 +24,6 @@ const RISK_STYLES: Record<RiskLevel, { on: string; off: string }> = {
   5: { on: 'bg-red-600 text-white border-red-600',         off: 'text-red-700 border-red-300 hover:bg-red-50' },
 };
 
-const STATUS_DOT: Record<string, string> = {
-  not_started: 'bg-gray-300',
-  in_progress: 'bg-amber-400',
-  assessed: 'bg-[#005B6E]',
-};
-
 // Merge the stored assessment onto the template so every category is present,
 // in template order, even if the stored data predates a template change.
 function buildItems(form: Company, templateItems: { category: string; question: string }[]): DDRiskItem[] {
@@ -245,7 +239,6 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                 className="flex items-center gap-2 min-w-0 flex-1 text-left"
               >
                 <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status]}`} />
                 <span className="text-sm font-semibold text-[#1A1A1A] truncate">{idx + 1}. {item.category}</span>
               </button>
               {/* Risk level 1–5 — always visible and clickable, collapsed or not */}
