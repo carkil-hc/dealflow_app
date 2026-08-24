@@ -11,6 +11,22 @@ import { rowToCompany } from './companies.js';
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
+const { parseOffice } = require('officeparser') as { parseOffice: (input: Buffer) => Promise<any> };
+
+// Office document mime types officeparser can extract text from.
+const OFFICE_TYPES: Record<string, true> = {
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true, // docx
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': true, // pptx
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': true, // xlsx
+  'application/msword': true,
+  'application/vnd.ms-powerpoint': true,
+  'application/vnd.ms-excel': true,
+};
+function isOfficeType(type: string, name: string): boolean {
+  if (OFFICE_TYPES[type]) return true;
+  return /\.(docx?|pptx?|xlsx?)$/i.test(name || '');
+}
 
 // ── Palette (shared HealthCap look) ──────────────────────────────────────────
 const TEAL = '005B6E';
@@ -237,9 +253,11 @@ ddReportRouter.post('/api/companies/:id/dd/analyze-files', async (req, res) => {
     const pdfs = atts.filter((a: any) => a.type === 'application/pdf');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const images = atts.filter((a: any) => typeof a.type === 'string' && a.type.startsWith('image/'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const offices = atts.filter((a: any) => isOfficeType(a.type, a.name));
 
-    if (pdfs.length === 0 && images.length === 0) {
-      res.status(400).json({ error: 'No PDF or image files to analyze. Upload DD materials to the Files tab first.' });
+    if (pdfs.length === 0 && images.length === 0 && offices.length === 0) {
+      res.status(400).json({ error: 'No analyzable files. Upload PDF, Word, PowerPoint, Excel, or image files to the Files tab first.' });
       return;
     }
 
@@ -248,6 +266,8 @@ ddReportRouter.post('/api/companies/:id/dd/analyze-files', async (req, res) => {
     const content: Anthropic.MessageParam['content'] = [];
     const included: string[] = [];
     let used = 0;
+
+    // PDFs and images go as native blocks (Claude reads layout + visuals).
     for (const a of [...pdfs, ...images]) {
       if (used + a.data.length > CAP) continue;
       used += a.data.length;
@@ -257,6 +277,25 @@ ddReportRouter.post('/api/companies/:id/dd/analyze-files', async (req, res) => {
       } else {
         content.push({ type: 'image', source: { type: 'base64', media_type: a.type, data: a.data } } as Anthropic.ImageBlockParam);
       }
+    }
+
+    // Office docs: extract text server-side (Claude can't read docx/pptx/xlsx directly).
+    for (const a of offices) {
+      try {
+        const parsed = await parseOffice(Buffer.from(a.data, 'base64'));
+        const text = String(parsed.toText() ?? '').trim().slice(0, 60000); // cap per file
+        if (text) {
+          included.push(a.name);
+          content.push({ type: 'text', text: `--- Extracted text from "${a.name}" ---\n${text}` });
+        }
+      } catch (e) {
+        console.error(`[dd analyze-files] could not extract "${a.name}"`, e);
+      }
+    }
+
+    if (included.length === 0) {
+      res.status(400).json({ error: 'Could not read any of the attached files.' });
+      return;
     }
 
     content.push({
