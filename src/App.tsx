@@ -173,9 +173,11 @@ export default function App() {
     setSelected(null);
   };
 
-  // Open a company: fetch its full record (with attachment blobs, which the
-  // list omits for speed) before showing the modal.
+  // Open a company. For active companies we pre-fetch the full record (with
+  // attachment blobs) so files are ready. Rejected companies — the bulk of the
+  // data — open lightweight; their files load on demand from the Files tab.
   const handleSelect = async (c: Company) => {
+    if (c.stage === 'rejected') { setSelected(c); return; }
     try {
       setSelected(await getCompany(c.id));
     } catch {
@@ -283,6 +285,7 @@ export default function App() {
           onAutoSave={handleAutoSave}
           onDelete={handleDelete}
           onClose={() => setSelected(null)}
+          attachmentsLoaded={selected === 'new' || selected.stage !== 'rejected'}
         />
       )}
     </div>

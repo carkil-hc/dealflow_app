@@ -6,6 +6,9 @@ import { saveFile, deleteFile, downloadFile } from '../db';
 interface Props {
   attachments: Attachment[];
   onChange: (attachments: Attachment[]) => void;
+  // When true, file blobs haven't been loaded yet (lazy — rejected companies);
+  // downloads are disabled until the caller loads them.
+  downloadsDisabled?: boolean;
 }
 
 function fileIcon(type: string) {
@@ -14,7 +17,7 @@ function fileIcon(type: string) {
   return <File className="w-4 h-4 text-gray-400" />;
 }
 
-export default function FileUpload({ attachments, onChange }: Props) {
+export default function FileUpload({ attachments, onChange, downloadsDisabled = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -82,7 +85,9 @@ export default function FileUpload({ attachments, onChange }: Props) {
                 <div className="text-[11px] text-gray-400">{formatFileSize(att.size)} · {formatDate(att.uploadedAt)}</div>
               </div>
               <button type="button" onClick={() => handleDownload(att)}
-                className="p-1.5 text-gray-400 hover:text-[#005B6E] transition-colors" title="Download">
+                disabled={downloadsDisabled && !att.data}
+                className="p-1.5 text-gray-400 hover:text-[#005B6E] disabled:text-gray-200 disabled:hover:text-gray-200 disabled:cursor-not-allowed transition-colors"
+                title={downloadsDisabled && !att.data ? 'Load files first' : 'Download'}>
                 <Download className="w-4 h-4" />
               </button>
               <button type="button" onClick={() => handleRemove(att.id, !!att.data)}

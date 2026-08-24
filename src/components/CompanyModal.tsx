@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import {
   X, ArrowRight, XCircle, RotateCcw, Trash2, Save, ChevronRight,
   Building2, Briefcase, MessageSquare, Paperclip, History, FlaskConical,
-  LayoutDashboard, ClipboardCheck,
+  LayoutDashboard, ClipboardCheck, Loader2, Download,
 } from 'lucide-react';
 import {
   Company, Stage, STAGE_CONFIG, PIPELINE_STAGES, NEXT_STAGE,
   NoteEntry, formatDate, uid,
 } from '../types';
+import { getCompany } from '../store';
 import FileUpload from './FileUpload';
 import NoteTimeline from './NoteTimeline';
 import { addHistory, REJECTION_REASONS } from './companyModal/helpers';
@@ -25,6 +26,9 @@ interface Props {
   onAutoSave: (c: Company) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  // False when the modal was opened without pre-loading attachment blobs
+  // (rejected companies) — the Files tab then offers a "Load files" button.
+  attachmentsLoaded: boolean;
 }
 
 type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports';
@@ -51,7 +55,7 @@ function newCompany(owner?: string): Company {
   };
 }
 
-export default function CompanyModal({ company, currentUser, onSave, onAutoSave, onDelete, onClose }: Props) {
+export default function CompanyModal({ company, currentUser, onSave, onAutoSave, onDelete, onClose, attachmentsLoaded }: Props) {
   const [form, setForm] = useState<Company>(() => company ?? newCompany(currentUser));
   const [tab, setTab] = useState<Tab>('overview');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -61,6 +65,8 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
   const [ddReports, setDdReports] = useState<Record<string, { text: string; runAt: string } | null>>({});
   const [ddRunning, setDdRunning] = useState<Record<string, boolean>>({});
   const [ddCopied, setDdCopied] = useState<Record<string, boolean>>({});
+  const [filesLoaded, setFilesLoaded] = useState(attachmentsLoaded);
+  const [loadingFiles, setLoadingFiles] = useState(false);
 
   const isNew = !company;
 
@@ -68,7 +74,21 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
     setForm(company ?? newCompany(currentUser));
     setTab('overview');
     setErrors({});
+    setFilesLoaded(attachmentsLoaded);
   }, [company]);
+
+  // Fetch attachment blobs on demand (for rejected companies opened lazily).
+  const loadFiles = async () => {
+    if (!company) return;
+    setLoadingFiles(true);
+    try {
+      const full = await getCompany(company.id);
+      setForm(f => ({ ...f, attachments: full.attachments }));
+      setFilesLoaded(true);
+    } catch { /* leave unloaded; user can retry */ } finally {
+      setLoadingFiles(false);
+    }
+  };
 
   const set = <K extends keyof Company>(key: K, value: Company[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
@@ -281,10 +301,29 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
             )}
 
             {tab === 'files' && (
-              <FileUpload
-                attachments={form.attachments}
-                onChange={handleFileChange}
-              />
+              <div className="space-y-3">
+                {!filesLoaded && form.attachments.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 bg-[#E0F0F5]/50 border border-[#B3D8E2] px-4 py-2.5 rounded-sm">
+                    <span className="text-xs text-[#005B6E]">
+                      Files aren’t loaded automatically for rejected companies. Load them to view or download.
+                    </span>
+                    <button
+                      onClick={loadFiles}
+                      disabled={loadingFiles}
+                      className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+                    >
+                      {loadingFiles
+                        ? <><Loader2 className="w-3 h-3 animate-spin" /> Loading…</>
+                        : <><Download className="w-3 h-3" /> Load files</>}
+                    </button>
+                  </div>
+                )}
+                <FileUpload
+                  attachments={form.attachments}
+                  onChange={handleFileChange}
+                  downloadsDisabled={!filesLoaded}
+                />
+              </div>
             )}
 
             {tab === 'history' && <HistoryLog history={form.history || []} />}
