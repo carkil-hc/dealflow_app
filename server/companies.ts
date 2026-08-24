@@ -30,6 +30,8 @@ export function rowToCompany(row: Record<string, any>) {
     attachments: JSON.parse(row.attachments || '[]'),
     history: JSON.parse(row.history || '[]'),
     ddAssessment: row.dd_assessment ? JSON.parse(row.dd_assessment) : undefined,
+    // Present only on the lightweight list (attachments column not selected there).
+    ...(row.has_attachments != null ? { hasAttachments: !!row.has_attachments } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     rejectedReason: row.rejected_reason ?? undefined,
@@ -124,6 +126,10 @@ export const companiesRouter = Router();
 // stripped IN SQL (via OPENJSON) so they never even leave the database; only
 // attachment metadata (id/name/type/size/uploadedAt) is returned. The full
 // record with blobs is fetched per company on demand.
+// The attachments column holds base64 file blobs (tens of MB). Parsing it with
+// OPENJSON just to list metadata dominates the query time (~5.5s). The list
+// only needs to know whether a company HAS files, which DATALENGTH answers
+// without reading/parsing the blob (~0.1s). Actual attachments load per company.
 const LIST_QUERY = `
   SELECT
     id, name, description, stage, website, sector, location, therapeutic_area,
@@ -131,17 +137,7 @@ const LIST_QUERY = `
     strategy, owner, backburner_reminder, lead_contact, email, phone,
     note_entries, history, dd_assessment, created_at, updated_at,
     rejected_reason, rejected_at,
-    (
-      SELECT id, name, type, size, uploadedAt
-      FROM OPENJSON(attachments) WITH (
-        id nvarchar(100) '$.id',
-        name nvarchar(500) '$.name',
-        type nvarchar(200) '$.type',
-        size bigint '$.size',
-        uploadedAt nvarchar(40) '$.uploadedAt'
-      )
-      FOR JSON PATH
-    ) AS attachments
+    CAST(CASE WHEN DATALENGTH(attachments) > 4 THEN 1 ELSE 0 END AS BIT) AS has_attachments
   FROM companies
   ORDER BY created_at DESC`;
 

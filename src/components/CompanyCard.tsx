@@ -51,7 +51,7 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
       )}
 
       {/* Meta */}
-      {(company.location || company.fundingStage || company.attachments.length > 0 || company.noteEntries.length > 0) && (
+      {(company.location || company.fundingStage || company.attachments.length > 0 || company.hasAttachments || company.noteEntries.length > 0) && (
         <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
           {company.location && (
             <span className="flex items-center gap-0.5">
@@ -64,9 +64,9 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
             </span>
           )}
           <span className="ml-auto flex items-center gap-2">
-            {company.attachments.length > 0 && (
+            {(company.attachments.length > 0 || company.hasAttachments) && (
               <span className="flex items-center gap-0.5">
-                <Paperclip className="w-3 h-3" />{company.attachments.length}
+                <Paperclip className="w-3 h-3" />{company.attachments.length || ''}
               </span>
             )}
             {company.noteEntries.length > 0 && (

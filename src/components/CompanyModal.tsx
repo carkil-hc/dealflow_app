@@ -302,7 +302,7 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
 
             {tab === 'files' && (
               <div className="space-y-3">
-                {!filesLoaded && form.attachments.length > 0 && (
+                {!filesLoaded && (form.attachments.length > 0 || !!company?.hasAttachments) && (
                   <div className="flex items-center justify-between gap-3 bg-[#E0F0F5]/50 border border-[#B3D8E2] px-4 py-2.5 rounded-sm">
                     <span className="text-xs text-[#005B6E]">
                       Files aren’t loaded automatically for rejected companies. Load them to view or download.

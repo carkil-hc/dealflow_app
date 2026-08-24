@@ -137,6 +137,9 @@ export interface Company {
   attachments: Attachment[];
   history: HistoryEntry[];
   ddAssessment?: DDAssessment;
+  // Set on the lightweight list (where attachment blobs aren't loaded) to
+  // indicate the company has files without shipping them.
+  hasAttachments?: boolean;
   // Meta
   createdAt: string;
   updatedAt: string;

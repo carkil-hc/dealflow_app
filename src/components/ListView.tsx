@@ -177,9 +177,9 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
                         {company.askAmount || <span className="text-gray-300 font-normal">—</span>}
                       </td>
                       <td className="py-3 px-4">
-                        {company.attachments.length > 0 ? (
+                        {(company.attachments.length > 0 || company.hasAttachments) ? (
                           <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                            <Paperclip className="w-3 h-3" />{company.attachments.length}
+                            <Paperclip className="w-3 h-3" />{company.attachments.length || ''}
                           </span>
                         ) : <span className="text-gray-300 text-sm">—</span>}
                       </td>
