@@ -37,9 +37,38 @@ export function rowToCompany(row: Record<string, any>) {
   };
 }
 
+// Strip the heavy base64 file blobs from attachments, keeping metadata.
+// Used for the list endpoint so the payload stays small.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripAttachmentData(c: any) {
+  return {
+    ...c,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    attachments: (c.attachments ?? []).map(({ data, ...rest }: any) => rest),
+  };
+}
+
 // Insert or update one company (MERGE on id).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function upsertOne(pool: sql.ConnectionPool, c: any) {
+  // Safeguard: if incoming attachments were sent without their base64 `data`
+  // (e.g. from the lightweight list), restore each blob from the stored row so
+  // a save never wipes uploaded files.
+  let attachments = c.attachments ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (attachments.some((a: any) => a && a.id && a.data == null)) {
+    const existing = await pool.request()
+      .input('id', sql.NVarChar(50), c.id)
+      .query('SELECT attachments FROM companies WHERE id = @id');
+    if (existing.recordset.length) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prev = new Map<string, any>(JSON.parse(existing.recordset[0].attachments || '[]').map((a: any) => [a.id, a]));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      attachments = attachments.map((a: any) =>
+        a && a.data == null && prev.get(a.id)?.data != null ? { ...a, data: prev.get(a.id).data } : a);
+    }
+  }
+  c = { ...c, attachments };
   await pool.request()
     .input('id', sql.NVarChar(50), c.id)
     .input('name', sql.NVarChar(200), c.name)
@@ -102,16 +131,32 @@ export async function upsertOne(pool: sql.ConnectionPool, c: any) {
 
 export const companiesRouter = Router();
 
-// GET all companies
+// GET all companies — lightweight: attachment file blobs are stripped so the
+// payload stays small. The full record (with blobs) is fetched per company.
 companiesRouter.get('/api/companies', async (_req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request()
       .query('SELECT * FROM companies ORDER BY created_at DESC');
-    res.json(result.recordset.map(rowToCompany));
+    res.json(result.recordset.map(rowToCompany).map(stripAttachmentData));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch companies' });
+  }
+});
+
+// GET one company — full record including attachment file blobs.
+companiesRouter.get('/api/companies/:id', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('id', sql.NVarChar(50), req.params.id)
+      .query('SELECT * FROM companies WHERE id = @id');
+    if (result.recordset.length === 0) { res.status(404).json({ error: 'Company not found' }); return; }
+    res.json(rowToCompany(result.recordset[0]));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch company' });
   }
 });
 

@@ -6,6 +6,14 @@ export async function getCompanies(): Promise<Company[]> {
   return res.json();
 }
 
+// Full record for one company, including attachment file blobs (which the
+// list endpoint strips for speed).
+export async function getCompany(id: string): Promise<Company> {
+  const res = await fetch(`/api/companies/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch company');
+  return res.json();
+}
+
 export async function upsertCompany(company: Company): Promise<void> {
   await fetch(`/api/companies/${company.id}`, {
     method: 'PUT',

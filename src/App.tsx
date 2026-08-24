@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Company, Stage, BOARD_STAGES, uid } from './types';
-import { getCompanies, upsertCompany, deleteCompany as apiDeleteCompany, bulkUpsertCompanies } from './store';
+import { getCompanies, getCompany, upsertCompany, deleteCompany as apiDeleteCompany, bulkUpsertCompanies } from './store';
 import Header, { View } from './components/Header';
 import KanbanView from './components/KanbanView';
 import ListView from './components/ListView';
@@ -173,6 +173,16 @@ export default function App() {
     setSelected(null);
   };
 
+  // Open a company: fetch its full record (with attachment blobs, which the
+  // list omits for speed) before showing the modal.
+  const handleSelect = async (c: Company) => {
+    try {
+      setSelected(await getCompany(c.id));
+    } catch {
+      setSelected(c); // fall back to the lightweight version
+    }
+  };
+
   const handleStageChange = (id: string, stage: Stage) => {
     const now = new Date().toISOString();
     const company = companies.find(c => c.id === id);
@@ -232,20 +242,20 @@ export default function App() {
         onChangeUser={() => setShowUserSetup(true)}
       />
 
-      <FilterBar companies={companies} filters={filters} onChange={setFilters} onSelectCompany={setSelected} />
+      <FilterBar companies={companies} filters={filters} onChange={setFilters} onSelectCompany={handleSelect} />
 
       <main className="flex-1 px-8 py-6">
         {view === 'kanban' && (
-          <KanbanView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} onAdd={() => setSelected('new')} />
+          <KanbanView companies={activeCompanies} onSelect={handleSelect} onStageChange={handleStageChange} onAdd={() => setSelected('new')} />
         )}
         {view === 'list' && (
-          <ListView companies={activeCompanies} onSelect={setSelected} onStageChange={handleStageChange} />
+          <ListView companies={activeCompanies} onSelect={handleSelect} onStageChange={handleStageChange} />
         )}
         {view === 'invested' && (
-          <InvestedView companies={investedCompanies} onSelect={setSelected} />
+          <InvestedView companies={investedCompanies} onSelect={handleSelect} />
         )}
         {view === 'rejected' && (
-          <RejectedView companies={rejectedCompanies} onSelect={setSelected} />
+          <RejectedView companies={rejectedCompanies} onSelect={handleSelect} />
         )}
       </main>
 
