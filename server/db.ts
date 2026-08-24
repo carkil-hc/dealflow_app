@@ -39,9 +39,13 @@ export async function getPool(): Promise<sql.ConnectionPool> {
       encrypt: true,
       trustServerCertificate: false,
     },
+    // A serverless Azure SQL database can be paused and takes ~30-60s to resume.
+    // Wait for the resume instead of failing at the 15s default.
+    connectionTimeout: 60000,
+    requestTimeout: 60000,
     pool: {
       max: 10,
-      min: 2,
+      min: 1,
       idleTimeoutMillis: 600000,
     },
     authentication: {
@@ -50,6 +54,19 @@ export async function getPool(): Promise<sql.ConnectionPool> {
     },
   };
 
-  pool = await new sql.ConnectionPool(config).connect();
-  return pool;
+  // Retry the initial connect a few times — the first attempts while a paused
+  // serverless DB is still resuming can bounce before it accepts connections.
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      pool = await new sql.ConnectionPool(config).connect();
+      return pool;
+    } catch (err) {
+      lastErr = err;
+      pool = null;
+      poolExpiresAt = 0;
+      if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+  throw lastErr;
 }
