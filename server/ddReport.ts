@@ -6,11 +6,12 @@ import type PptxGenJS from 'pptxgenjs';
 import { getPool } from './db.js';
 import { anthropic } from './anthropic.js';
 import { rowToCompany } from './companies.js';
+import {
+  newDeck, toBase64, footer, headerBar, coverSlide,
+  TEAL, WHITE, DARK, LIGHT_TEAL, GRAY, MID_GRAY, RISK_COLOR, RISK_LABEL,
+} from './pptx.js';
 
-// pptxgenjs ships an ESM build older Node parses as CJS; load the CJS build.
 const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const PptxGenJSCtor: typeof PptxGenJS = require('pptxgenjs');
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
 const { parseOffice } = require('officeparser') as { parseOffice: (input: Buffer) => Promise<any> };
 
@@ -28,17 +29,6 @@ function isOfficeType(type: string, name: string): boolean {
   return /\.(docx?|pptx?|xlsx?)$/i.test(name || '');
 }
 
-// ── Palette (shared HealthCap look) ──────────────────────────────────────────
-const TEAL = '005B6E';
-const WHITE = 'FFFFFF';
-const DARK = '1A1A1A';
-const LIGHT_TEAL = 'E0F0F5';
-const GRAY = 'F5F5F5';
-const MID_GRAY = '9CA3AF';
-
-const RISK_COLOR: Record<number, string> = { 1: '16A34A', 2: '059669', 3: 'F59E0B', 4: 'EA580C', 5: 'DC2626' };
-const RISK_LABEL: Record<number, string> = { 1: 'Low', 2: 'Low–Medium', 3: 'Medium', 4: 'High', 5: 'Very High' };
-
 // ── Content shapes ───────────────────────────────────────────────────────────
 interface DimContent {
   category: string;
@@ -52,17 +42,6 @@ interface DimContent {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Slide = any;
-
-function footer(pptx: PptxGenJS, slide: Slide) {
-  slide.addShape(pptx.ShapeType.line, { x: 0.4, y: 7.15, w: 12.53, h: 0, line: { color: LIGHT_TEAL, width: 1 } });
-  slide.addText('HealthCap — Confidential', { x: 0.4, y: 7.2, w: 12.5, h: 0.25, fontSize: 8, color: MID_GRAY, fontFace: 'Calibri' });
-}
-
-function headerBar(pptx: PptxGenJS, slide: Slide, title: string, companyName: string) {
-  slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: TEAL }, line: { color: TEAL, width: 0 } });
-  slide.addText(title, { x: 0.4, y: 0.15, w: 9.2, h: 0.7, fontSize: 20, bold: true, color: WHITE, fontFace: 'Calibri', valign: 'middle' });
-  slide.addText(companyName, { x: 9.6, y: 0.2, w: 3.4, h: 0.6, fontSize: 12, color: LIGHT_TEAL, fontFace: 'Calibri', align: 'right', valign: 'middle' });
-}
 
 function riskBadge(pptx: PptxGenJS, slide: Slide, level: number | null, x: number, y: number) {
   const color = level ? RISK_COLOR[level] : '9CA3AF';
@@ -113,34 +92,17 @@ function addDimensionSlides(pptx: PptxGenJS, companyName: string, dim: DimConten
   }
 }
 
-async function pptxBase64(pptx: PptxGenJS): Promise<string> {
-  return (await pptx.write({ outputType: 'base64' })) as string;
-}
-
 // Single-dimension deck (summary slide first, no cover).
 export async function buildDimensionDeck(companyName: string, dim: DimContent): Promise<string> {
-  const pptx = new PptxGenJSCtor();
-  pptx.layout = 'LAYOUT_WIDE';
+  const pptx = newDeck();
   addDimensionSlides(pptx, companyName, dim);
-  return pptxBase64(pptx);
+  return toBase64(pptx);
 }
 
 // Combined deck: cover + overview table + every dimension's slides.
 export async function buildCombinedDeck(companyName: string, dims: DimContent[]): Promise<string> {
-  const pptx = new PptxGenJSCtor();
-  pptx.layout = 'LAYOUT_WIDE';
-
-  // Cover
-  {
-    const c = pptx.addSlide();
-    c.background = { color: TEAL };
-    c.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.08, h: 7.5, fill: { color: WHITE }, line: { color: WHITE, width: 0 } });
-    c.addText('HealthCap', { x: 0.3, y: 0.35, w: 3, h: 0.4, fontSize: 14, bold: true, color: WHITE, fontFace: 'Calibri' });
-    c.addText('DUE DILIGENCE SUMMARY', { x: 0.3, y: 1.6, w: 12.7, h: 0.7, fontSize: 34, bold: true, color: WHITE, fontFace: 'Calibri' });
-    c.addText(companyName, { x: 0.3, y: 2.4, w: 12.7, h: 0.7, fontSize: 26, color: LIGHT_TEAL, fontFace: 'Calibri' });
-    c.addText(`Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-      { x: 0.3, y: 6.9, w: 12.7, h: 0.35, fontSize: 10, color: LIGHT_TEAL, fontFace: 'Calibri' });
-  }
+  const pptx = newDeck();
+  coverSlide(pptx, 'DUE DILIGENCE SUMMARY', companyName);
 
   // Overview table
   {
@@ -165,7 +127,7 @@ export async function buildCombinedDeck(companyName: string, dims: DimContent[])
   }
 
   for (const dim of dims) addDimensionSlides(pptx, companyName, dim);
-  return pptxBase64(pptx);
+  return toBase64(pptx);
 }
 
 // ── Claude synthesis ─────────────────────────────────────────────────────────
