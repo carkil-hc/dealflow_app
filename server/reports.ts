@@ -2,7 +2,7 @@ import { Router } from 'express';
 import sql from 'mssql';
 import type PptxGenJS from 'pptxgenjs';
 import { getPool } from './db.js';
-import { anthropic } from './anthropic.js';
+import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { newDeck, toBase64, footer, headerBar, coverSlide, TEAL, WHITE, DARK, LIGHT_TEAL, GRAY } from './pptx.js';
 
@@ -172,19 +172,9 @@ Rules:
 - Be specific — use real company/drug names where known
 - If data is limited, note this in the overallAssessment`;
 
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 3000,
-      messages: [{ role: 'user', content: prompt }],
+    const data = await askClaudeJson<CompetitiveLandscapeData>({
+      content: prompt, model: 'claude-opus-4-5', maxTokens: 3000,
     });
-
-    const textBlock = message.content.find(b => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') throw new Error('No text response from Claude');
-
-    // Extract JSON
-    const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in Claude response');
-    const data: CompetitiveLandscapeData = JSON.parse(jsonMatch[0]);
 
     // Build human-readable text report (shown in the DD Reports card)
     const report = [

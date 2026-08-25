@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { getPool } from './db.js';
-import { anthropic } from './anthropic.js';
+import { askClaudeJson } from './anthropic.js';
 import { upsertOne } from './companies.js';
 
 // Derive a display name from a healthcap.eu sender address.
@@ -61,18 +61,8 @@ async function processIngest(payload: Record<string, any>): Promise<void> {
     text: `You are processing an inbound pitch deck for a healthcare/life science VC firm.\n\nEmail subject: ${subject ?? ''}\nEmail body: ${body ?? ''}\nSender: ${from ?? ''}${noDocNote}\n\nRead the pitch deck carefully and extract company information. Return ONLY a valid JSON object with these exact fields (use null for anything you cannot determine):\n\n{"name":"Company legal or trade name","description":"2-3 sentence summary of what the company does and its key value proposition","website":"URL if present, else null","sector":"exactly one of: Pharmaceutical, Medtech, Healthtech, Tool, Other","location":"country name only","therapeuticArea":"the primary disease area or therapeutic indication (e.g. Oncology, CNS, Cardiology, Rare Disease, Immunology, Infectious Disease, etc.) — look for disease names, indications, and patient populations throughout the deck","developmentStage":"exactly one of: Preclinical, IND-stage, Phase I, Phase II, Phase III, Marketed — look for pipeline tables, clinical section headings, and regulatory status","nextMilestone":"the single most important upcoming milestone (e.g. IND filing, Phase I start, Phase II data readout, regulatory approval) — look for roadmap/timeline slides","fundingStage":"exactly one of: Seed, Series A, Series B, Series C+, IPO, Public — or null","askAmount":"the amount they are raising in this round, as a string (e.g. €10M, $15M) — or null","valuation":"pre-money or post-money valuation if stated — or null","leadContact":"full name of main contact person","email":"contact email address","phone":"contact phone number"}`,
   });
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content }],
-  });
-
-  const textBlock = message.content.find(c => c.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
-
-  const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error(`No JSON in Claude response. Raw: ${textBlock.text.slice(0, 300)}`);
-  const extracted = JSON.parse(jsonMatch[0]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extracted = await askClaudeJson<any>({ content, maxTokens: 1024 });
 
   const now = new Date().toISOString();
 

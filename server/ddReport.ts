@@ -4,7 +4,7 @@ import sql from 'mssql';
 import Anthropic from '@anthropic-ai/sdk';
 import type PptxGenJS from 'pptxgenjs';
 import { getPool } from './db.js';
-import { anthropic } from './anthropic.js';
+import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import {
   newDeck, toBase64, footer, headerBar, coverSlide,
@@ -164,16 +164,7 @@ Rules:
 Dimensions:
 ${JSON.stringify(payload, null, 2)}`;
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 4000,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const textBlock = message.content.find(b => b.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
-  const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON in Claude response');
-  return JSON.parse(jsonMatch[0]);
+  return askClaudeJson({ content: prompt, maxTokens: 4000 });
 }
 
 // ── Route ────────────────────────────────────────────────────────────────────
@@ -278,17 +269,8 @@ Rules:
 - riskLevelSuggested is a suggestion only.`,
     });
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 4000,
-      messages: [{ role: 'user', content }],
-    });
-    const textBlock = message.content.find(b => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') throw new Error('No text from Claude');
-    const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('No JSON array in Claude response');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw: any[] = JSON.parse(jsonMatch[0]);
+    const raw = await askClaudeJson<any[]>({ content, maxTokens: 4000, array: true });
 
     // Keep only findings whose category matches the framework.
     const findings = raw
