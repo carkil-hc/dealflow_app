@@ -1,6 +1,7 @@
 ﻿import { useRef, useState } from 'react';
 import { Upload, X, Download, FileText, File } from 'lucide-react';
 import { Attachment, formatFileSize, formatDate, uid } from '../types';
+import { downloadBase64 } from '../ui';
 import { saveFile, deleteFile, downloadFile } from '../db';
 
 interface Props {
@@ -43,14 +44,7 @@ export default function FileUpload({ attachments, onChange, downloadsDisabled = 
   const handleDownload = (att: Attachment) => {
     if (att.data) {
       // Server-ingested attachment: reconstruct from inline base64
-      const byteChars = atob(att.data);
-      const byteNums = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([byteNums], { type: att.type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = att.name; a.click();
-      URL.revokeObjectURL(url);
+      downloadBase64(att.data, att.name, att.type);
     } else {
       downloadFile(att.id, att.name);
     }

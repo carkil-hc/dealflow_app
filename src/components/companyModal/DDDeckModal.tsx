@@ -1,5 +1,6 @@
 import { X, Download, FileText } from 'lucide-react';
 import { Attachment } from '../../types';
+import { RISK_PILL, RISK_LABEL, downloadBase64 } from '../../ui';
 
 interface DimContent {
   category: string;
@@ -21,29 +22,10 @@ interface Props {
   onClose: () => void;
 }
 
-const RISK_TEXT: Record<number, string> = {
-  1: 'text-green-700 bg-green-50 border-green-200',
-  2: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  3: 'text-amber-700 bg-amber-50 border-amber-200',
-  4: 'text-orange-700 bg-orange-50 border-orange-200',
-  5: 'text-red-700 bg-red-50 border-red-200',
-};
-const RISK_LABEL: Record<number, string> = { 1: 'Low', 2: 'Low–Medium', 3: 'Medium', 4: 'High', 5: 'Very High' };
-
 function RiskPill({ level }: { level: number | null }) {
   if (level == null) return <span className="text-[11px] px-2 py-0.5 border border-gray-200 text-gray-400 rounded-sm">Not assessed</span>;
-  return <span className={`text-[11px] font-semibold px-2 py-0.5 border rounded-sm ${RISK_TEXT[level]}`}>Risk {level}/5 · {RISK_LABEL[level]}</span>;
-}
-
-function download(att: Attachment) {
-  if (!att.data) return;
-  const chars = atob(att.data);
-  const bytes = new Uint8Array(chars.length);
-  for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: att.type }));
-  const a = document.createElement('a');
-  a.href = url; a.download = att.name; a.click();
-  URL.revokeObjectURL(url);
+  const lvl = level as 1 | 2 | 3 | 4 | 5;
+  return <span className={`text-[11px] font-semibold px-2 py-0.5 border rounded-sm ${RISK_PILL[lvl]}`}>Risk {lvl}/5 · {RISK_LABEL[lvl]}</span>;
 }
 
 export default function DDDeckModal({ deck, onClose }: Props) {
@@ -100,7 +82,7 @@ export default function DDDeckModal({ deck, onClose }: Props) {
         <div className="border-t border-gray-200 bg-gray-50 px-6 py-3.5 flex items-center justify-between gap-3 shrink-0">
           <span className="text-[11px] text-gray-400">Preview of the slide content. Download to open the formatted .pptx in PowerPoint.</span>
           <button
-            onClick={() => download(attachment)}
+            onClick={() => attachment.data && downloadBase64(attachment.data, attachment.name, attachment.type)}
             className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm"
           >
             <Download className="w-4 h-4" /> Download .pptx

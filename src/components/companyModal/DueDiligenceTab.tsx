@@ -5,6 +5,7 @@ import {
   ddTemplateFor, ddItemStatus, uid,
 } from '../../types';
 import Placeholder from './Placeholder';
+import { RISK_BUTTON } from '../../ui';
 import { addHistory } from './helpers';
 import DDDeckModal, { Deck } from './DDDeckModal';
 
@@ -14,15 +15,6 @@ interface Props {
   onAutoSave: (c: Company) => void;
   currentUser: string;
 }
-
-// 1 = low risk (green) … 5 = high risk (red)
-const RISK_STYLES: Record<RiskLevel, { on: string; off: string }> = {
-  1: { on: 'bg-green-600 text-white border-green-600',     off: 'text-green-700 border-green-300 hover:bg-green-50' },
-  2: { on: 'bg-emerald-600 text-white border-emerald-600', off: 'text-emerald-700 border-emerald-300 hover:bg-emerald-50' },
-  3: { on: 'bg-amber-500 text-white border-amber-500',     off: 'text-amber-700 border-amber-300 hover:bg-amber-50' },
-  4: { on: 'bg-orange-600 text-white border-orange-600',   off: 'text-orange-700 border-orange-300 hover:bg-orange-50' },
-  5: { on: 'bg-red-600 text-white border-red-600',         off: 'text-red-700 border-red-300 hover:bg-red-50' },
-};
 
 // Merge the stored assessment onto the template so every category is present,
 // in template order, even if the stored data predates a template change.
@@ -245,7 +237,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
               <div className="flex items-center gap-1 shrink-0">
                 {([1, 2, 3, 4, 5] as RiskLevel[]).map(level => {
                   const selected = item.riskLevel === level;
-                  const s = RISK_STYLES[level];
+                  const s = RISK_BUTTON[level];
                   return (
                     <button
                       key={level}
@@ -287,7 +279,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                             </span>
                           )}
                           {f.riskLevelSuggested && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 border bg-white rounded-sm ${RISK_STYLES[f.riskLevelSuggested].off}`}>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 border bg-white rounded-sm ${RISK_BUTTON[f.riskLevelSuggested].off}`}>
                               suggests {f.riskLevelSuggested}
                             </span>
                           )}
