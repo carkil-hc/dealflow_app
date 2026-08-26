@@ -58,10 +58,10 @@ export default function FileUpload({ attachments, onChange, downloadsDisabled = 
         onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
         onClick={() => inputRef.current?.click()}
         className={`border-2 border-dashed px-8 py-10 text-center cursor-pointer transition-colors ${
-          dragging ? 'border-[#005B6E] bg-[#E0F0F5]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+          dragging ? 'border-hc-teal bg-hc-teal-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
         } rounded-sm`}
       >
-        <Upload className={`w-7 h-7 mx-auto mb-2 ${dragging ? 'text-[#005B6E]' : 'text-gray-300'}`} />
+        <Upload className={`w-7 h-7 mx-auto mb-2 ${dragging ? 'text-hc-teal' : 'text-gray-300'}`} />
         <p className="text-sm text-gray-500">{uploading ? 'Uploading…' : 'Drop files here or click to browse'}</p>
         <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, images</p>
         <input ref={inputRef} type="file" multiple className="hidden"
@@ -80,7 +80,7 @@ export default function FileUpload({ attachments, onChange, downloadsDisabled = 
               </div>
               <button type="button" onClick={() => handleDownload(att)}
                 disabled={downloadsDisabled && !att.data}
-                className="p-1.5 text-gray-400 hover:text-[#005B6E] disabled:text-gray-200 disabled:hover:text-gray-200 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 text-gray-400 hover:text-hc-teal disabled:text-gray-200 disabled:hover:text-gray-200 disabled:cursor-not-allowed transition-colors"
                 title={downloadsDisabled && !att.data ? 'Load files first' : 'Download'}>
                 <Download className="w-4 h-4" />
               </button>

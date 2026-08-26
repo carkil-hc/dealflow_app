@@ -197,11 +197,11 @@ export const STAGE_CONFIG: Record<Stage, StageConfig> = {
   invested: {
     label: 'Invested',
     shortLabel: 'Invested',
-    headerBg: 'bg-[#E0F0F5]',
-    headerText: 'text-[#005B6E]',
-    badgeBg: 'bg-[#E0F0F5]',
-    badgeText: 'text-[#005B6E]',
-    dot: 'bg-[#005B6E]',
+    headerBg: 'bg-hc-teal-50',
+    headerText: 'text-hc-teal',
+    badgeBg: 'bg-hc-teal-50',
+    badgeText: 'text-hc-teal',
+    dot: 'bg-hc-teal',
   },
   backburner: {
     label: 'Backburner',

@@ -121,7 +121,7 @@ function ComboFilter({ label, options, selected, onChange }: {
       <div
         onClick={handleOpen}
         className={`flex items-center gap-1.5 border px-2.5 py-1.5 cursor-pointer transition-colors ${
-          open ? 'border-[#005B6E] ring-1 ring-[#005B6E]' : 'border-gray-200 hover:border-gray-300'
+          open ? 'border-hc-teal ring-1 ring-hc-teal' : 'border-gray-200 hover:border-gray-300'
         } bg-white rounded-sm`}
       >
         <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -140,7 +140,7 @@ function ComboFilter({ label, options, selected, onChange }: {
               ? <span className="text-gray-400">All</span>
               : selected.length === 1
                 ? <span className="text-[#1A1A1A]">{selected[0]}</span>
-                : <span className="text-[#005B6E] font-medium">{selected.length} selected</span>
+                : <span className="text-hc-teal font-medium">{selected.length} selected</span>
             }
           </span>
         )}
@@ -159,7 +159,7 @@ function ComboFilter({ label, options, selected, onChange }: {
                 type="button"
                 onClick={() => { onChange([]); setOpen(false); setSearch(''); }}
                 className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-gray-50 border-b border-gray-100 ${
-                  selected.length === 0 ? 'text-[#005B6E] font-medium' : 'text-gray-500 italic'
+                  selected.length === 0 ? 'text-hc-teal font-medium' : 'text-gray-500 italic'
                 }`}
               >
                 All
@@ -170,10 +170,10 @@ function ComboFilter({ label, options, selected, onChange }: {
                   key={opt}
                   type="button"
                   onClick={() => toggle(opt)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-[#E0F0F5]/50 hover:text-[#1A1A1A] transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-hc-teal-50/50 hover:text-[#1A1A1A] transition-colors"
                 >
                   <span>{opt}</span>
-                  {selected.includes(opt) && <Check className="w-3.5 h-3.5 text-[#005B6E] shrink-0" />}
+                  {selected.includes(opt) && <Check className="w-3.5 h-3.5 text-hc-teal shrink-0" />}
                 </button>
               ))}
             </>
@@ -246,14 +246,14 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           onClick={() => setOpen(o => !o)}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors shrink-0 ${
             open || activeCount > 0
-              ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
+              ? 'border-hc-teal text-hc-teal bg-hc-teal-50'
               : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-[#1A1A1A] bg-white'
           } rounded-sm`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filters
           {activeCount > 0 && (
-            <span className="bg-[#005B6E] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+            <span className="bg-hc-teal text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
               {activeCount}
             </span>
           )}
@@ -266,13 +266,13 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
             onClick={() => setStrategyOpen(o => !o)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors shrink-0 ${
               strategyOpen || filters.strategy.length > 0
-                ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
+                ? 'border-hc-teal text-hc-teal bg-hc-teal-50'
                 : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:text-[#1A1A1A] bg-white'
             } rounded-sm`}
           >
             Strategy
             {filters.strategy.length > 0 && (
-              <span className="bg-[#005B6E] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+              <span className="bg-hc-teal text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
                 {filters.strategy.length}
               </span>
             )}
@@ -285,7 +285,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
                 type="button"
                 onClick={() => onChange({ ...filters, strategy: [] })}
                 className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-gray-50 border-b border-gray-100 ${
-                  filters.strategy.length === 0 ? 'text-[#005B6E] font-medium' : 'text-gray-500 italic'
+                  filters.strategy.length === 0 ? 'text-hc-teal font-medium' : 'text-gray-500 italic'
                 }`}
               >
                 All
@@ -301,10 +301,10 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
                       ...filters,
                       strategy: active ? filters.strategy.filter(v => v !== s) : [...filters.strategy, s],
                     })}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-[#E0F0F5]/50 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-hc-teal-50/50 transition-colors"
                   >
                     {s}
-                    {active && <Check className="w-3.5 h-3.5 text-[#005B6E]" />}
+                    {active && <Check className="w-3.5 h-3.5 text-hc-teal" />}
                   </button>
                 );
               })}
@@ -323,7 +323,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
             onFocus={() => { if (search) setSearchOpen(true); }}
             onKeyDown={e => { if (e.key === 'Escape') { setSearch(''); setSearchOpen(false); } }}
             placeholder="Search companies…"
-            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] outline-none bg-white w-64 transition-colors rounded-sm"
+            className="pl-8 pr-7 py-1.5 text-sm border border-gray-200 hover:border-gray-300 focus:border-hc-teal focus:ring-1 focus:ring-hc-teal outline-none bg-white w-64 transition-colors rounded-sm"
           />
           {search && (
             <button
@@ -349,7 +349,7 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
                       key={company.id}
                       type="button"
                       onClick={() => handleSelectResult(company)}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#E0F0F5]/50 transition-colors text-left border-b border-gray-50 last:border-0"
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-hc-teal-50/50 transition-colors text-left border-b border-gray-50 last:border-0"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-[#1A1A1A] truncate">{company.name}</div>
@@ -377,9 +377,9 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
           filters[key].map(val => (
             <span
               key={`${key}-${val}`}
-              className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium rounded-sm"
+              className="flex items-center gap-1 bg-hc-teal-50 text-hc-teal text-xs px-2.5 py-1 font-medium rounded-sm"
             >
-              <span className="text-[#005B6E]/60 mr-0.5">{FILTER_LABELS[key]}:</span>
+              <span className="text-hc-teal/60 mr-0.5">{FILTER_LABELS[key]}:</span>
               {val}
               <button onClick={() => removeChip(key, val)} className="ml-0.5 hover:text-[#003D4D]">
                 <X className="w-3 h-3" />
@@ -390,8 +390,8 @@ export default function FilterBar({ companies, filters, onChange, onSelectCompan
 
         {/* Strategy chips */}
         {filters.strategy.map(val => (
-          <span key={`strategy-${val}`} className="flex items-center gap-1 bg-[#E0F0F5] text-[#005B6E] text-xs px-2.5 py-1 font-medium rounded-sm">
-            <span className="text-[#005B6E]/60 mr-0.5">Strategy:</span>
+          <span key={`strategy-${val}`} className="flex items-center gap-1 bg-hc-teal-50 text-hc-teal text-xs px-2.5 py-1 font-medium rounded-sm">
+            <span className="text-hc-teal/60 mr-0.5">Strategy:</span>
             {val}
             <button onClick={() => onChange({ ...filters, strategy: filters.strategy.filter(v => v !== val) })} className="ml-0.5 hover:text-[#003D4D]">
               <X className="w-3 h-3" />

@@ -64,7 +64,7 @@ export default function CompanyTab({ form, set, errors, onRejectClick }: Company
                 onClick={() => set('strategy', s as Strategy)}
                 className={`px-3 py-1.5 text-xs font-medium border transition-colors ${
                   (form.strategy ?? 'N/a') === s
-                    ? 'bg-[#005B6E] text-white border-[#005B6E]'
+                    ? 'bg-hc-teal text-white border-hc-teal'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700'
                 } rounded-sm`}>
                 {s}

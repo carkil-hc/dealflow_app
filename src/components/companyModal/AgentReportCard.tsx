@@ -22,7 +22,7 @@ export default function AgentReportCard({ title, description, report, running, c
         <button
           onClick={onRun}
           disabled={running}
-          className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+          className="flex items-center gap-1.5 shrink-0 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
         >
           {running
             ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>
@@ -42,13 +42,13 @@ export default function AgentReportCard({ title, description, report, running, c
           <div className="flex items-center gap-2 mt-2.5">
             <button
               onClick={() => onCopy(report.text)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-hc-teal px-2 py-1 hover:bg-hc-teal-50 transition-colors rounded-sm"
             >
               {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
             </button>
             <button
               onClick={onSaveAsNote}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#005B6E] px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-hc-teal px-2 py-1 hover:bg-hc-teal-50 transition-colors rounded-sm"
             >
               <StickyNote className="w-3 h-3" /> Save as note
             </button>

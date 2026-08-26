@@ -241,14 +241,14 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium border-l-2 transition-colors text-left ${
                   tab === t.id
-                    ? 'border-[#005B6E] text-[#005B6E] bg-[#E0F0F5]'
+                    ? 'border-hc-teal text-hc-teal bg-hc-teal-50'
                     : 'border-transparent text-gray-500 hover:text-[#1A1A1A] hover:bg-gray-100'
                 } rounded-sm`}
               >
                 {t.icon}
                 <span className="flex-1">{t.label}</span>
                 {t.id === 'files' && form.attachments.length > 0 && (
-                  <span className="bg-[#E0F0F5] text-[#005B6E] text-[10px] font-bold px-1.5 py-0.5 leading-none rounded-sm">
+                  <span className="bg-hc-teal-50 text-hc-teal text-[10px] font-bold px-1.5 py-0.5 leading-none rounded-sm">
                     {form.attachments.length}
                   </span>
                 )}
@@ -303,14 +303,14 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
             {tab === 'files' && (
               <div className="space-y-3">
                 {!filesLoaded && (form.attachments.length > 0 || !!company?.hasAttachments) && (
-                  <div className="flex items-center justify-between gap-3 bg-[#E0F0F5]/50 border border-[#B3D8E2] px-4 py-2.5 rounded-sm">
-                    <span className="text-xs text-[#005B6E]">
+                  <div className="flex items-center justify-between gap-3 bg-hc-teal-50/50 border border-hc-teal-100 px-4 py-2.5 rounded-sm">
+                    <span className="text-xs text-hc-teal">
                       Files aren’t loaded automatically for rejected companies. Load them to view or download.
                     </span>
                     <button
                       onClick={loadFiles}
                       disabled={loadingFiles}
-                      className="flex items-center gap-1.5 shrink-0 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+                      className="flex items-center gap-1.5 shrink-0 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
                     >
                       {loadingFiles
                         ? <><Loader2 className="w-3 h-3 animate-spin" /> Loading…</>
@@ -377,7 +377,7 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
               </button>
             ) : (
               <button onClick={handleReactivate}
-                className="flex items-center gap-1.5 text-[#005B6E] hover:text-[#004A58] text-sm px-3 py-2 hover:bg-[#E0F0F5] transition-colors rounded-sm">
+                className="flex items-center gap-1.5 text-hc-teal hover:text-hc-teal-700 text-sm px-3 py-2 hover:bg-hc-teal-50 transition-colors rounded-sm">
                 <RotateCcw className="w-4 h-4" /> Reactivate
               </button>
             )}
@@ -390,7 +390,7 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
             )}
 
             <button onClick={handleSave}
-              className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm">
+              className="flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm">
               <Save className="w-4 h-4" />
               {isNew ? 'Add Company' : 'Save Changes'}
             </button>

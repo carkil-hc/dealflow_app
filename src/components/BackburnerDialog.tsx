@@ -80,7 +80,7 @@ export default function BackburnerDialog({ company, onConfirm, onSkip }: Props) 
               value={date}
               min={new Date().toISOString().slice(0, 10)}
               onChange={e => setDate(e.target.value)}
-              className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
+              className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-hc-teal focus:ring-1 focus:ring-hc-teal bg-white rounded-sm"
             />
           </div>
         </div>

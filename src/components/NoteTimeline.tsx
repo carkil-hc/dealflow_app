@@ -76,7 +76,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
           <button
             onClick={handleAdd}
             disabled={!draft.trim()}
-            className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+            className="flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
           >
             <Send className="w-3 h-3" />
             Add Note
@@ -120,13 +120,13 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
                         onKeyDown={e => handleEditKey(e, note.id)}
                         rows={3}
                         autoFocus
-                        className="w-full border border-[#005B6E] ring-1 ring-[#005B6E] px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none resize-none bg-white rounded-sm"
+                        className="w-full border border-hc-teal ring-1 ring-hc-teal px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none resize-none bg-white rounded-sm"
                       />
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
                           onClick={() => saveEdit(note.id)}
                           disabled={!editText.trim()}
-                          className="flex items-center gap-1 text-xs bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white px-2.5 py-1 transition-colors rounded-sm"
+                          className="flex items-center gap-1 text-xs bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white px-2.5 py-1 transition-colors rounded-sm"
                         >
                           <Check className="w-3 h-3" /> Save
                         </button>
@@ -151,7 +151,7 @@ export default function NoteTimeline({ notes, currentUser, onChange }: Props) {
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 shrink-0">
                     <button
                       onClick={() => startEdit(note)}
-                      className="text-gray-300 hover:text-[#005B6E] transition-colors p-1"
+                      className="text-gray-300 hover:text-hc-teal transition-colors p-1"
                       title="Edit note"
                     >
                       <Pencil className="w-3.5 h-3.5" />

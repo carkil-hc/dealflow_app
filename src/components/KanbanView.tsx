@@ -70,7 +70,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
             onDrop={e => handleDrop(e, stage)}
             className={`flex-none w-[272px] h-full flex flex-col border overflow-hidden transition-colors ${
               isOver && !isDraggingFromHere
-                ? 'border-[#005B6E] bg-[#E0F0F5]/30'
+                ? 'border-hc-teal bg-hc-teal-50/30'
                 : 'border-gray-200 bg-white'
             } rounded-sm`}
           >
@@ -93,7 +93,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
               {stage === 'new' && (
                 <button
                   onClick={onAdd}
-                  className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-300 hover:border-[#005B6E] hover:text-[#005B6E] text-gray-400 text-sm py-2.5 transition-colors bg-white rounded-sm"
+                  className="w-full flex items-center justify-center gap-1.5 border border-dashed border-gray-300 hover:border-hc-teal hover:text-hc-teal text-gray-400 text-sm py-2.5 transition-colors bg-white rounded-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add Company
@@ -101,7 +101,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
               )}
               {stageCompanies.length === 0 ? (
                 <div className={`text-center py-10 text-xs transition-colors ${
-                  isOver && !isDraggingFromHere ? 'text-[#005B6E]' : 'text-gray-300'
+                  isOver && !isDraggingFromHere ? 'text-hc-teal' : 'text-gray-300'
                 }`}>
                   {isOver && !isDraggingFromHere ? 'Drop here' : 'No companies'}
                 </div>
@@ -130,7 +130,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
 
               {/* Drop target hint when dragging over a non-empty column */}
               {isOver && !isDraggingFromHere && stageCompanies.length > 0 && (
-                <div className="border-2 border-dashed border-[#005B6E]/40 rounded py-3 text-center text-xs text-[#005B6E]/60">
+                <div className="border-2 border-dashed border-hc-teal/40 rounded py-3 text-center text-xs text-hc-teal/60">
                   Drop here
                 </div>
               )}

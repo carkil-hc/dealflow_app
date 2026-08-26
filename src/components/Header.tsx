@@ -42,7 +42,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
           {/* Pipeline count */}
           <span className="hidden lg:block text-xs text-gray-400">
             <span className="font-medium text-[#1A1A1A]">{totalActive}</span> active
-            {investedCount > 0 && <> · <span className="text-[#005B6E] font-medium">{investedCount}</span> invested</>}
+            {investedCount > 0 && <> · <span className="text-hc-teal font-medium">{investedCount}</span> invested</>}
             {rejectedCount > 0 && <> · <span className="text-red-500 font-medium">{rejectedCount}</span> rejected</>}
           </span>
         </div>
@@ -52,7 +52,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
           {([
             { id: 'kanban' as View, label: 'Board',    Icon: LayoutGrid },
             { id: 'list'   as View, label: 'List',     Icon: List },
-            { id: 'invested' as View, label: 'Invested', Icon: CheckCircle2, count: investedCount, badge: 'bg-[#E0F0F5] text-[#005B6E]' },
+            { id: 'invested' as View, label: 'Invested', Icon: CheckCircle2, count: investedCount, badge: 'bg-hc-teal-50 text-hc-teal' },
             { id: 'rejected' as View, label: 'Rejected', Icon: XCircle, count: rejectedCount, badge: 'bg-red-100 text-red-600' },
           ]).map(({ id, label, Icon, count, badge }) => (
             <button
@@ -60,7 +60,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
               onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors ${
                 view === id
-                  ? 'bg-[#E0F0F5] text-[#005B6E] font-medium'
+                  ? 'bg-hc-teal-50 text-hc-teal font-medium'
                   : 'text-gray-500 hover:text-[#1A1A1A] hover:bg-gray-50'
               }`}
             >
@@ -82,7 +82,7 @@ export default function Header({ view, setView, onImport, onExport, counts, reje
             className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#1A1A1A] transition-colors"
             title="Change user"
           >
-            <span className="w-6 h-6 rounded-full bg-[#005B6E] text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="w-6 h-6 rounded-full bg-hc-teal text-white text-[10px] font-bold flex items-center justify-center">
               {currentUser.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)}
             </span>
             <span className="font-medium">{currentUser}</span>

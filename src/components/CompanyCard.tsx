@@ -18,7 +18,7 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
   return (
     <div
       onClick={() => onSelect(company)}
-      className="bg-white border border-gray-200 px-3 py-2.5 cursor-pointer hover:border-[#005B6E]/40 hover:shadow-sm transition-all group rounded-sm"
+      className="bg-white border border-gray-200 px-3 py-2.5 cursor-pointer hover:border-hc-teal/40 hover:shadow-sm transition-all group rounded-sm"
     >
       {/* Name + owner */}
       <h3 className="font-semibold text-[#1A1A1A] text-sm leading-snug truncate">{company.name}</h3>
@@ -33,7 +33,7 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
       {(company.sector || company.therapeuticArea || company.developmentStage) && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {company.sector && (
-            <span className="text-[11px] bg-[#E0F0F5] text-[#005B6E] px-1.5 py-0.5 font-medium">
+            <span className="text-[11px] bg-hc-teal-50 text-hc-teal px-1.5 py-0.5 font-medium">
               {company.sector}
             </span>
           )}
@@ -94,7 +94,7 @@ export default function CompanyCard({ company, onSelect, onAdvance }: Props) {
         <div className="max-h-0 overflow-hidden group-hover:max-h-8 transition-all duration-200">
           <button
             onClick={(e) => { e.stopPropagation(); onAdvance(company.id); }}
-            className="mt-1.5 w-full flex items-center justify-center gap-1 text-[11px] text-[#005B6E] hover:bg-[#E0F0F5] py-1 transition-colors"
+            className="mt-1.5 w-full flex items-center justify-center gap-1 text-[11px] text-hc-teal hover:bg-hc-teal-50 py-1 transition-colors"
           >
             <ArrowRight className="w-3 h-3" />
             Move to {STAGE_CONFIG[nextStage].label}

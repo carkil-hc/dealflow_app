@@ -218,10 +218,10 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
 
           {done ? (
             <div className="flex flex-col items-center py-10 gap-3">
-              <CheckCircle className="w-10 h-10 text-[#005B6E]" />
+              <CheckCircle className="w-10 h-10 text-hc-teal" />
               <p className="text-lg font-semibold text-[#1A1A1A]">{done.imported} {done.imported === 1 ? 'company' : 'companies'} imported</p>
               {done.skipped > 0 && <p className="text-sm text-gray-400">{done.skipped} row{done.skipped !== 1 ? 's' : ''} skipped</p>}
-              <button onClick={onClose} className="mt-2 bg-[#005B6E] hover:bg-[#004A58] text-white px-5 py-2 text-sm font-medium transition-colors rounded-sm">
+              <button onClick={onClose} className="mt-2 bg-hc-teal hover:bg-hc-teal-700 text-white px-5 py-2 text-sm font-medium transition-colors rounded-sm">
                 Done
               </button>
             </div>
@@ -234,9 +234,9 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
                   onDragLeave={() => setDragging(false)}
                   onDrop={handleDrop}
                   onClick={() => inputRef.current?.click()}
-                  className={`border-2 border-dashed px-8 py-12 text-center cursor-pointer transition-colors ${dragging ? 'border-[#005B6E] bg-[#E0F0F5]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'} rounded-sm`}
+                  className={`border-2 border-dashed px-8 py-12 text-center cursor-pointer transition-colors ${dragging ? 'border-hc-teal bg-hc-teal-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'} rounded-sm`}
                 >
-                  <Upload className={`w-8 h-8 mx-auto mb-3 ${dragging ? 'text-[#005B6E]' : 'text-gray-300'}`} />
+                  <Upload className={`w-8 h-8 mx-auto mb-3 ${dragging ? 'text-hc-teal' : 'text-gray-300'}`} />
                   <p className="text-sm font-medium text-gray-600">Drop a CSV file here or click to browse</p>
                   <p className="text-xs text-gray-400 mt-1">Accepted columns: name, stage, sector, location, therapeutic area, development stage, funding stage, ask amount, lead contact, website, and more</p>
                   <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
@@ -284,7 +284,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
                     )}
                     {duplicateCount > 0 && (
                       <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer ml-auto">
-                        <input type="checkbox" checked={skipDuplicates} onChange={e => setSkipDuplicates(e.target.checked)} className="accent-[#005B6E]" />
+                        <input type="checkbox" checked={skipDuplicates} onChange={e => setSkipDuplicates(e.target.checked)} className="accent-hc-teal" />
                         Skip duplicates
                       </label>
                     )}
@@ -346,7 +346,7 @@ export default function ImportModal({ existingCompanies, onImport, onClose }: Pr
               <button
                 onClick={handleImport}
                 disabled={toImport.length === 0 || importing}
-                className="px-4 py-2 text-sm font-medium bg-[#005B6E] hover:bg-[#004A58] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm"
+                className="px-4 py-2 text-sm font-medium bg-hc-teal hover:bg-hc-teal-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-sm"
               >
                 {importing
                   ? `Importing ${toImport.length}…`

@@ -4,7 +4,7 @@ import {
 import { Stage, STAGE_CONFIG, HistoryEntry, formatDateTime } from '../../types';
 
 const EVENT_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: (e: HistoryEntry) => string }> = {
-  created:       { icon: <PlusCircle className="w-3.5 h-3.5" />, color: 'text-[#005B6E]', label: () => 'Deal created' },
+  created:       { icon: <PlusCircle className="w-3.5 h-3.5" />, color: 'text-hc-teal', label: () => 'Deal created' },
   stage_changed: { icon: <ArrowRightCircle className="w-3.5 h-3.5" />, color: 'text-blue-500', label: e => `Moved from ${STAGE_CONFIG[e.fromStage as Stage]?.label ?? e.fromStage} → ${STAGE_CONFIG[e.toStage as Stage]?.label ?? e.toStage}` },
   note_added:    { icon: <StickyNote className="w-3.5 h-3.5" />, color: 'text-violet-500', label: () => 'Note added' },
   note_edited:   { icon: <StickyNote className="w-3.5 h-3.5" />, color: 'text-violet-400', label: () => 'Note edited' },

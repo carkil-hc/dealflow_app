@@ -170,7 +170,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-sm ${
-              overall === 'Complete' ? 'bg-[#E0F0F5] text-[#005B6E]'
+              overall === 'Complete' ? 'bg-hc-teal-50 text-hc-teal'
               : overall === 'In progress' ? 'bg-amber-50 text-amber-700'
               : 'bg-gray-100 text-gray-500'
             }`}>
@@ -180,7 +180,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
               onClick={analyze}
               disabled={analyzing || genScope !== null}
               title="Draft findings from the files in the Files tab"
-              className="flex items-center gap-1.5 border border-[#005B6E] text-[#005B6E] hover:bg-[#E0F0F5] disabled:border-gray-200 disabled:text-gray-400 text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+              className="flex items-center gap-1.5 border border-hc-teal text-hc-teal hover:bg-hc-teal-50 disabled:border-gray-200 disabled:text-gray-400 text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
             >
               {analyzing
                 ? <><Loader2 className="w-3 h-3 animate-spin" /> Analyzing…</>
@@ -189,7 +189,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
             <button
               onClick={() => generate()}
               disabled={genScope !== null || analyzing}
-              className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
+              className="flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
             >
               {genScope === 'all'
                 ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>
@@ -199,16 +199,16 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
         </div>
         {/* progress bar */}
         <div className="mt-2.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-[#005B6E] transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-hc-teal transition-all" style={{ width: `${pct}%` }} />
         </div>
         {genErr && <p className="text-xs text-red-500 mt-2">{genErr}</p>}
       </div>
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-gray-400">
         <div className="flex items-center gap-2">
-          <button onClick={expandAll} className="hover:text-[#005B6E] transition-colors">Expand all</button>
+          <button onClick={expandAll} className="hover:text-hc-teal transition-colors">Expand all</button>
           <span className="text-gray-300">·</span>
-          <button onClick={collapseAll} className="hover:text-[#005B6E] transition-colors">Collapse all</button>
+          <button onClick={collapseAll} className="hover:text-hc-teal transition-colors">Collapse all</button>
         </div>
         <div className="flex items-center gap-2">
           <span>Risk level:</span>
@@ -261,13 +261,13 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                   onBlur={commitComment}
                   rows={3}
                   placeholder="Findings, open questions, notes…"
-                  className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white resize-y rounded-sm"
+                  className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-hc-teal focus:ring-1 focus:ring-hc-teal bg-white resize-y rounded-sm"
                 />
                 {/* AI-suggested findings from files (phase 2) */}
                 {(item.findings ?? []).length > 0 && (
                   <div className="mt-3 space-y-2">
                     <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-[#005B6E]" /> Suggested findings
+                      <Sparkles className="w-3 h-3 text-hc-teal" /> Suggested findings
                     </div>
                     {(item.findings ?? []).map(f => (
                       <div key={f.id} className="border border-gray-100 bg-gray-50 px-3 py-2 rounded-sm">
@@ -287,14 +287,14 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                             {f.riskLevelSuggested && (
                               <button
                                 onClick={() => applySuggested(idx, f.riskLevelSuggested as RiskLevel)}
-                                className="text-[11px] text-[#005B6E] hover:bg-[#E0F0F5] px-2 py-0.5 transition-colors rounded-sm"
+                                className="text-[11px] text-hc-teal hover:bg-hc-teal-50 px-2 py-0.5 transition-colors rounded-sm"
                               >
                                 Apply risk
                               </button>
                             )}
                             <button
                               onClick={() => addToNotes(idx, f.text)}
-                              className="text-[11px] text-gray-500 hover:text-[#005B6E] hover:bg-[#E0F0F5] px-2 py-0.5 transition-colors rounded-sm"
+                              className="text-[11px] text-gray-500 hover:text-hc-teal hover:bg-hc-teal-50 px-2 py-0.5 transition-colors rounded-sm"
                             >
                               Add to notes
                             </button>
@@ -315,7 +315,7 @@ export default function DueDiligenceTab({ form, setForm, onAutoSave, currentUser
                   <button
                     onClick={() => generate(item.category)}
                     disabled={genScope !== null}
-                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#005B6E] disabled:text-gray-300 px-2 py-1 hover:bg-[#E0F0F5] transition-colors rounded-sm"
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-hc-teal disabled:text-gray-300 px-2 py-1 hover:bg-hc-teal-50 transition-colors rounded-sm"
                   >
                     {genScope === item.category
                       ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>

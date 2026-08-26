@@ -38,7 +38,7 @@ export default function DDDeckModal({ deck, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <FileText className="w-4 h-4 text-[#005B6E] shrink-0" />
+            <FileText className="w-4 h-4 text-hc-teal shrink-0" />
             <h3 className="font-semibold text-[#1A1A1A] text-sm truncate">{attachment.name}</h3>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-[#1A1A1A] transition-colors ml-4 shrink-0">
@@ -67,7 +67,7 @@ export default function DDDeckModal({ deck, onClose }: Props) {
                     )}
                     {dim.detail.map((d, i) => (
                       <div key={i}>
-                        <div className="text-xs font-semibold text-[#005B6E] uppercase tracking-wide">{d.heading}</div>
+                        <div className="text-xs font-semibold text-hc-teal uppercase tracking-wide">{d.heading}</div>
                         <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">{d.body}</p>
                       </div>
                     ))}
@@ -83,7 +83,7 @@ export default function DDDeckModal({ deck, onClose }: Props) {
           <span className="text-[11px] text-gray-400">Preview of the slide content. Download to open the formatted .pptx in PowerPoint.</span>
           <button
             onClick={() => attachment.data && downloadBase64(attachment.data, attachment.name, attachment.type)}
-            className="flex items-center gap-1.5 bg-[#005B6E] hover:bg-[#004A58] text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm"
+            className="flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 text-white text-sm px-4 py-2 font-medium transition-colors rounded-sm"
           >
             <Download className="w-4 h-4" /> Download .pptx
           </button>

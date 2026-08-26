@@ -12,7 +12,7 @@ export default function InvestedView({ companies, onSelect }: Props) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <CheckCircle2 className="w-4 h-4 text-[#005B6E]" />
+        <CheckCircle2 className="w-4 h-4 text-hc-teal" />
         <h2 className="text-sm font-semibold text-[#1A1A1A]">Invested Companies</h2>
         <span className="text-sm text-gray-400">({companies.length})</span>
       </div>
@@ -39,7 +39,7 @@ export default function InvestedView({ companies, onSelect }: Props) {
                 <tr
                   key={company.id}
                   onClick={() => onSelect(company)}
-                  className="hover:bg-[#E0F0F5]/40 cursor-pointer transition-colors"
+                  className="hover:bg-hc-teal-50/40 cursor-pointer transition-colors"
                 >
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">

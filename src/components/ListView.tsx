@@ -69,12 +69,12 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
           placeholder="Search companies…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 px-3 py-2 text-sm w-60 focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
+          className="border border-gray-200 px-3 py-2 text-sm w-60 focus:outline-none focus:border-hc-teal focus:ring-1 focus:ring-hc-teal bg-white rounded-sm"
         />
         <select
           value={filterStage}
           onChange={(e) => setFilterStage(e.target.value as Stage | 'all')}
-          className="border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#005B6E] focus:ring-1 focus:ring-[#005B6E] bg-white rounded-sm"
+          className="border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-hc-teal focus:ring-1 focus:ring-hc-teal bg-white rounded-sm"
         >
           <option value="all">All Stages</option>
           {ACTIVE_STAGES.map((s) => (
@@ -128,7 +128,7 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
                     <tr
                       key={company.id}
                       onClick={() => onSelect(company)}
-                      className="hover:bg-[#E0F0F5]/30 cursor-pointer transition-colors"
+                      className="hover:bg-hc-teal-50/30 cursor-pointer transition-colors"
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function ListView({ companies, onSelect, onStageChange }: Props) 
                           {company.website && (
                             <a href={company.website} target="_blank" rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="text-gray-300 hover:text-[#005B6E]">
+                              className="text-gray-300 hover:text-hc-teal">
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
