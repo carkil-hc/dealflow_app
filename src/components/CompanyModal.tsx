@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   X, ArrowRight, XCircle, RotateCcw, Trash2, Save, ChevronRight,
   Building2, Briefcase, MessageSquare, Paperclip, History, FlaskConical,
-  LayoutDashboard, ClipboardCheck, Loader2, Download,
+  LayoutDashboard, ClipboardCheck, Loader2, Download, FileSignature,
 } from 'lucide-react';
 import {
   Company, Stage, STAGE_CONFIG, PIPELINE_STAGES, NEXT_STAGE,
@@ -18,6 +18,7 @@ import CompanyTab from './companyModal/CompanyTab';
 import DealTab from './companyModal/DealTab';
 import DueDiligenceTab from './companyModal/DueDiligenceTab';
 import DDReportsTab from './companyModal/DDReportsTab';
+import InvestmentDocsTab from './companyModal/InvestmentDocsTab';
 
 interface Props {
   company: Company | null;
@@ -31,7 +32,7 @@ interface Props {
   attachmentsLoaded: boolean;
 }
 
-type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports';
+type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports' | 'investment_docs';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview',      label: 'Overview',       icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
@@ -40,8 +41,9 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'due_diligence', label: 'Due Diligence',  icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
   { id: 'notes',         label: 'Notes',          icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { id: 'files',         label: 'Files',          icon: <Paperclip className="w-3.5 h-3.5" /> },
-  { id: 'history',       label: 'History',        icon: <History className="w-3.5 h-3.5" /> },
-  { id: 'dd_reports',    label: 'DD Reports',     icon: <FlaskConical className="w-3.5 h-3.5" /> },
+  { id: 'history',         label: 'History',        icon: <History className="w-3.5 h-3.5" /> },
+  { id: 'dd_reports',      label: 'DD Reports',     icon: <FlaskConical className="w-3.5 h-3.5" /> },
+  { id: 'investment_docs', label: 'Investment Docs', icon: <FileSignature className="w-3.5 h-3.5" /> },
 ];
 
 function newCompany(owner?: string): Company {
@@ -339,6 +341,15 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
                 setRunning={setDdRunning}
                 copied={ddCopied}
                 setCopied={setDdCopied}
+              />
+            )}
+
+            {tab === 'investment_docs' && (
+              <InvestmentDocsTab
+                form={form}
+                setForm={setForm}
+                onAutoSave={onAutoSave}
+                currentUser={currentUser}
               />
             )}
           </div>
