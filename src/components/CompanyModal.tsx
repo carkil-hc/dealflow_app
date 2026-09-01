@@ -348,6 +348,7 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
               <InvestmentDocsTab
                 form={form}
                 setForm={setForm}
+                onAutoSave={onAutoSave}
                 currentUser={currentUser}
               />
             )}

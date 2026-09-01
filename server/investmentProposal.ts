@@ -96,10 +96,11 @@ export async function buildProposalDocx(companyName: string, d: ProposalData): P
 // ── Route ────────────────────────────────────────────────────────────────────
 export const investmentProposalRouter = Router();
 
-// Draft + save the proposal. Runs in the background (opus reading a pitch deck
-// can take longer than the platform's HTTP timeout), persisting the .docx to
-// the company's attachments; the client polls the Files tab for it.
-async function generateProposal(id: string): Promise<void> {
+// Draft the proposal and return it as an attachment (the client saves it to
+// Files). Synchronous within the request — reliable on App Service, and fast
+// enough to fit the HTTP timeout by using Sonnet.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildProposalAttachment(id: string): Promise<any> {
     const pool = await getPool();
     const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
     if (result.recordset.length === 0) throw new Error('Company not found');
@@ -164,39 +165,29 @@ Company data (from the deal system):
 ${JSON.stringify(fields, null, 2)}`,
     });
 
-    const data = await askClaudeJson<ProposalData>({ content, model: 'claude-opus-4-5', maxTokens: 8000 });
+    const data = await askClaudeJson<ProposalData>({ content, model: 'claude-sonnet-4-5', maxTokens: 8000 });
 
     const base64 = await buildProposalDocx(c.name, data);
     const bytes = Buffer.from(base64, 'base64');
-    const now = new Date().toISOString();
     const safe = c.name.replace(/[^a-z0-9 _-]/gi, '_');
-    const attachment = {
+    return {
       id: `${Date.now()}-ip`,
       name: `${safe} — Investment Proposal.docx`,
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       size: bytes.length,
-      uploadedAt: now,
+      uploadedAt: new Date().toISOString(),
       data: base64,
     };
-
-    // Persist: append to the company's attachments + a history entry.
-    const updatedAtts = [...(c.attachments ?? []), attachment];
-    const updatedHistory = [...(c.history ?? []), { id: `${Date.now()}-h`, type: 'file_added', timestamp: now, user: 'Claude', detail: attachment.name }];
-    await pool.request()
-      .input('id', sql.NVarChar(50), id)
-      .input('attachments', sql.NVarChar(sql.MAX), JSON.stringify(updatedAtts))
-      .input('history', sql.NVarChar(sql.MAX), JSON.stringify(updatedHistory))
-      .input('updated_at', sql.NVarChar(30), now)
-      .query('UPDATE companies SET attachments = @attachments, history = @history, updated_at = @updated_at WHERE id = @id');
-    console.log(`[investment-proposal] saved "${attachment.name}" (${bytes.length} bytes)`);
 }
 
 // POST /api/companies/:id/investment-proposal
-// Kicks off proposal generation in the background and returns immediately; the
-// finished .docx appears in the company's Files tab (the client polls for it).
-investmentProposalRouter.post('/api/companies/:id/investment-proposal', (req, res) => {
-  res.json({ ok: true, status: 'processing' });
-  generateProposal(req.params.id).catch(err => {
-    console.error('[investment-proposal]', err instanceof Error ? err.message : err);
-  });
+// Drafts the proposal and returns it; the client saves it to the Files tab.
+investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (req, res) => {
+  try {
+    const attachment = await buildProposalAttachment(req.params.id);
+    res.json({ attachment });
+  } catch (err) {
+    console.error('[investment-proposal]', err);
+    res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });
+  }
 });
