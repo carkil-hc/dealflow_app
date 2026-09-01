@@ -96,14 +96,13 @@ export async function buildProposalDocx(companyName: string, d: ProposalData): P
 // ── Route ────────────────────────────────────────────────────────────────────
 export const investmentProposalRouter = Router();
 
-// POST /api/companies/:id/investment-proposal
-// Drafts a HealthCap investment proposal (.docx) for the company using its
-// record fields and attached materials, and saves it to the Files tab.
-investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (req, res) => {
-  try {
+// Draft + save the proposal. Runs in the background (opus reading a pitch deck
+// can take longer than the platform's HTTP timeout), persisting the .docx to
+// the company's attachments; the client polls the Files tab for it.
+async function generateProposal(id: string): Promise<void> {
     const pool = await getPool();
-    const result = await pool.request().input('id', sql.NVarChar(50), req.params.id).query('SELECT * FROM companies WHERE id = @id');
-    if (result.recordset.length === 0) { res.status(404).json({ error: 'Company not found' }); return; }
+    const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
+    if (result.recordset.length === 0) throw new Error('Company not found');
     const c = rowToCompany(result.recordset[0]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,7 +164,7 @@ Company data (from the deal system):
 ${JSON.stringify(fields, null, 2)}`,
     });
 
-    const data = await askClaudeJson<ProposalData>({ content, model: 'claude-opus-4-5', maxTokens: 6000 });
+    const data = await askClaudeJson<ProposalData>({ content, model: 'claude-opus-4-5', maxTokens: 8000 });
 
     const base64 = await buildProposalDocx(c.name, data);
     const bytes = Buffer.from(base64, 'base64');
@@ -180,9 +179,24 @@ ${JSON.stringify(fields, null, 2)}`,
       data: base64,
     };
 
-    res.json({ attachment });
-  } catch (err) {
-    console.error('[investment-proposal]', err);
-    res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });
-  }
+    // Persist: append to the company's attachments + a history entry.
+    const updatedAtts = [...(c.attachments ?? []), attachment];
+    const updatedHistory = [...(c.history ?? []), { id: `${Date.now()}-h`, type: 'file_added', timestamp: now, user: 'Claude', detail: attachment.name }];
+    await pool.request()
+      .input('id', sql.NVarChar(50), id)
+      .input('attachments', sql.NVarChar(sql.MAX), JSON.stringify(updatedAtts))
+      .input('history', sql.NVarChar(sql.MAX), JSON.stringify(updatedHistory))
+      .input('updated_at', sql.NVarChar(30), now)
+      .query('UPDATE companies SET attachments = @attachments, history = @history, updated_at = @updated_at WHERE id = @id');
+    console.log(`[investment-proposal] saved "${attachment.name}" (${bytes.length} bytes)`);
+}
+
+// POST /api/companies/:id/investment-proposal
+// Kicks off proposal generation in the background and returns immediately; the
+// finished .docx appears in the company's Files tab (the client polls for it).
+investmentProposalRouter.post('/api/companies/:id/investment-proposal', (req, res) => {
+  res.json({ ok: true, status: 'processing' });
+  generateProposal(req.params.id).catch(err => {
+    console.error('[investment-proposal]', err instanceof Error ? err.message : err);
+  });
 });

@@ -1,17 +1,16 @@
 import { Dispatch, SetStateAction, useState } from 'react';
 import { FileSignature, Loader2, Download, Check } from 'lucide-react';
 import { Company, Attachment } from '../../types';
-import { addHistory } from './helpers';
+import { getCompany } from '../../store';
 import { downloadBase64 } from '../../ui';
 
 interface Props {
   form: Company;
   setForm: Dispatch<SetStateAction<Company>>;
-  onAutoSave: (c: Company) => void;
   currentUser: string;
 }
 
-export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUser }: Props) {
+export default function InvestmentDocsTab({ form, setForm }: Props) {
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Attachment | null>(null);
@@ -20,25 +19,39 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
     setGenerating(true);
     setErr('');
     setDone(null);
+    const existingIds = new Set(form.attachments.map(a => a.id));
+
     try {
       const res = await fetch(`/api/companies/${form.id}/investment-proposal`, { method: 'POST' });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || 'Generation failed');
-      }
-      const { attachment } = await res.json() as { attachment: Attachment };
-      const now = new Date().toISOString();
-      let updated: Company = { ...form, attachments: [...form.attachments, attachment] };
-      updated = addHistory(updated, { type: 'file_added', timestamp: now, user: currentUser, detail: attachment.name });
-      updated = { ...updated, updatedAt: now };
-      setForm(updated);
-      onAutoSave(updated);
-      setDone(attachment);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not generate the proposal.');
-    } finally {
+      if (!res.ok) throw new Error('start failed');
+    } catch {
+      setErr('Could not start generation. Make sure the company is saved, then try again.');
       setGenerating(false);
+      return;
     }
+
+    // Generation runs in the background (can take a minute or two). Poll the
+    // company until the new proposal appears in its attachments.
+    const started = Date.now();
+    const tick = async () => {
+      if (Date.now() - started > 4 * 60 * 1000) {
+        setErr('Still generating — it should appear in the Files tab shortly.');
+        setGenerating(false);
+        return;
+      }
+      try {
+        const full = await getCompany(form.id);
+        const created = full.attachments.find(a => !existingIds.has(a.id) && /Investment Proposal\.docx$/i.test(a.name));
+        if (created) {
+          setForm(prev => ({ ...prev, attachments: full.attachments, history: full.history }));
+          setDone(created);
+          setGenerating(false);
+          return;
+        }
+      } catch { /* transient — keep polling */ }
+      setTimeout(tick, 8000);
+    };
+    setTimeout(tick, 8000);
   };
 
   return (
@@ -66,6 +79,11 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
               : <><FileSignature className="w-3 h-3" /> Generate proposal</>}
           </button>
         </div>
+        {generating && (
+          <div className="px-4 py-2.5 text-xs text-gray-400">
+            Reading the materials and drafting — this can take a minute or two. The document will appear in the Files tab when ready.
+          </div>
+        )}
         {done && (
           <div className="px-4 py-3 flex items-center justify-between gap-3">
             <span className="text-sm text-gray-600 flex items-center gap-1.5 min-w-0">
