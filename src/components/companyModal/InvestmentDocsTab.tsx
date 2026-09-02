@@ -26,6 +26,7 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState('');
   const [sent, setSent] = useState<{ envelopeId: string; signers: string[] } | null>(null);
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   useEffect(() => {
     fetch('/api/signers')
@@ -39,7 +40,14 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const twoChosen = !!signer1 && !!signer2 && signer1 !== signer2;
   const canSend = hasProposal && twoChosen && !sending;
 
+  // Guard against accidental duplicates: if a proposal already exists, ask first.
+  const onGenerateClick = () => {
+    if (hasProposal) { setConfirmRegen(true); return; }
+    void generate();
+  };
+
   const generate = async () => {
+    setConfirmRegen(false);
     setGenerating(true);
     setErr('');
     setDone(null);
@@ -53,7 +61,9 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
       const { attachment, sharePoint } = await res.json() as { attachment: Attachment; sharePoint: { url: string } | { error: string } | null };
       setSp(sharePoint);
       const now = new Date().toISOString();
-      let updated: Company = { ...form, attachments: [...form.attachments, attachment] };
+      // Replace any prior proposal so there's always exactly one in Files.
+      const withoutOld = form.attachments.filter((a) => !/Investment Proposal\.docx$/i.test(a.name));
+      let updated: Company = { ...form, attachments: [...withoutOld, attachment] };
       updated = addHistory(updated, { type: 'file_added', timestamp: now, user: currentUser, detail: attachment.name });
       updated = { ...updated, updatedAt: now };
       setForm(updated);
@@ -111,13 +121,15 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={generate}
+              onClick={onGenerateClick}
               disabled={generating}
               className="flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 transition-colors rounded-sm"
             >
               {generating
                 ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating…</>
-                : <><FileSignature className="w-3 h-3" /> Generate proposal</>}
+                : hasProposal
+                  ? <><FileSignature className="w-3 h-3" /> Regenerate</>
+                  : <><FileSignature className="w-3 h-3" /> Generate proposal</>}
             </button>
             <button
               onClick={sendForSigning}
@@ -132,6 +144,27 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
           </div>
         </div>
 
+        {confirmRegen && (
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
+            <div className="text-xs text-amber-800">
+              An investment proposal already exists for this company. Generating again creates a new version and overwrites the SharePoint copy.
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => void generate()}
+                className="text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-sm transition-colors"
+              >
+                Generate a new version
+              </button>
+              <button
+                onClick={() => setConfirmRegen(false)}
+                className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1 rounded-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {generating && (
           <div className="px-4 py-2.5 text-xs text-gray-400">
             Reading the materials and drafting — this can take a minute or two. The document will appear in the Files tab when ready.
