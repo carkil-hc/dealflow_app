@@ -9,7 +9,8 @@ import {
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
-import { saveToSharePoint, sharePointConfigured } from './sharepoint.js';
+import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
+import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -86,6 +87,12 @@ export async function buildProposalDocx(companyName: string, d: ProposalData): P
         new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: NO_BORDERS, rows }),
         new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
         new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: '______________________________          ______________________________', font: FONT, size: 20 })] }),
+        // Invisible DocuSign anchors (white, tiny) so signature blocks auto-place.
+        new Paragraph({ children: [
+          new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT }),
+          new TextRun({ text: '                                                       ', size: 2, font: FONT }),
+          new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT }),
+        ] }),
         new Paragraph({ children: [new TextRun({ text: 'Draft generated for internal review — verify all figures before use.', italics: true, color: '888888', font: FONT, size: 16 })], spacing: { before: 240 } }),
       ],
     }],
@@ -204,5 +211,57 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
   } catch (err) {
     console.error('[investment-proposal]', err);
     res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// GET /api/signers — the server-authoritative signer allowlist for the dropdown.
+investmentProposalRouter.get('/api/signers', (_req, res) => {
+  res.json({ signers: SIGNERS });
+});
+
+// POST /api/companies/:id/investment-proposal/send-for-signing
+// Body: { signerEmails: string[] } — must be exactly two, both on the allowlist.
+// Fetches the company's proposal from SharePoint and sends a DocuSign envelope.
+investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-signing', async (req, res) => {
+  try {
+    if (!docusignConfigured()) {
+      return res.status(400).json({ error: 'DocuSign is not configured yet. Ask an admin to set the integration key and private key.' });
+    }
+    if (!sharePointConfigured()) {
+      return res.status(400).json({ error: 'SharePoint is not configured, so there is no signed source document to send.' });
+    }
+
+    const emails: string[] = Array.isArray(req.body?.signerEmails) ? req.body.signerEmails : [];
+    const unique = [...new Set(emails.map((e) => String(e).toLowerCase()))];
+    if (unique.length !== 2) {
+      return res.status(400).json({ error: 'Select exactly two signers.' });
+    }
+    const signers = unique.map((email) => SIGNERS.find((s) => s.email.toLowerCase() === email));
+    if (signers.some((s) => !s)) {
+      return res.status(400).json({ error: 'One or more selected signers are not on the allowlist.' });
+    }
+
+    // Resolve the company name to locate its SharePoint subfolder.
+    const pool = await getPool();
+    const r = await pool.request().input('id', req.params.id).query('SELECT name FROM companies WHERE id = @id');
+    const companyName: string | undefined = r.recordset[0]?.name;
+    if (!companyName) return res.status(404).json({ error: 'Company not found.' });
+
+    const proposal = await getProposalFromSharePoint(companyName);
+    if (!proposal) {
+      return res.status(400).json({ error: 'No investment proposal was found in SharePoint for this company. Generate one first.' });
+    }
+
+    const { envelopeId } = await sendForSignature({
+      documentBase64: proposal.base64,
+      documentName: proposal.name,
+      emailSubject: `Investment Proposal for signature – ${companyName}`,
+      signers: signers as { name: string; email: string }[],
+    });
+
+    res.json({ envelopeId, signers: signers.map((s) => s!.name), document: proposal.name });
+  } catch (err) {
+    console.error('[send-for-signing]', err);
+    res.status(500).json({ error: 'Failed to send for signing', detail: err instanceof Error ? err.message : String(err) });
   }
 });

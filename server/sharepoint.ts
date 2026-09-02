@@ -77,6 +77,31 @@ export function sharePointConfigured(): boolean {
   return !!process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
 }
 
+// Fetch the most recent "… Investment Proposal.docx" for a company from its
+// SharePoint subfolder. Returns null if none is found.
+export async function getProposalFromSharePoint(companyName: string): Promise<{ name: string; base64: string } | null> {
+  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
+  if (!shareUrl) throw new Error('SharePoint not configured');
+  const { driveId, itemId } = await resolveParentFolder(shareUrl);
+  const kids = await graph(`/drives/${driveId}/items/${itemId}/children?$select=id,name,folder&$top=999`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const folder = (kids?.value ?? []).find((c: any) => c.folder && c.name === safeName(companyName));
+  if (!folder) return null;
+  const files = await graph(`/drives/${driveId}/items/${folder.id}/children?$select=id,name,file,lastModifiedDateTime&$top=999`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const proposals = (files?.value ?? []).filter((f: any) => f.file && /Investment Proposal\.docx$/i.test(f.name));
+  if (proposals.length === 0) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  proposals.sort((a: any, b: any) => String(b.lastModifiedDateTime).localeCompare(String(a.lastModifiedDateTime)));
+  const item = proposals[0];
+  const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${item.id}/content`, {
+    headers: { Authorization: `Bearer ${await graphToken()}` },
+  });
+  if (!res.ok) throw new Error(`Graph download → ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return { name: item.name, base64: buf.toString('base64') };
+}
+
 // Save a generated document to `<configured folder>/<company>/<fileName>` in
 // SharePoint. Returns the web URL. Throws on any Graph/permission error.
 export async function saveToSharePoint(companyName: string, fileName: string, base64: string, contentType: string): Promise<string> {
