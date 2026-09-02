@@ -89,7 +89,7 @@ export async function getProposalFromSharePoint(companyName: string): Promise<{ 
   if (!folder) return null;
   const files = await graph(`/drives/${driveId}/items/${folder.id}/children?$select=id,name,file,lastModifiedDateTime&$top=999`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const proposals = (files?.value ?? []).filter((f: any) => f.file && /Investment Proposal\.docx$/i.test(f.name));
+  const proposals = (files?.value ?? []).filter((f: any) => f.file && /Investment Proposal.*\.docx$/i.test(f.name));
   if (proposals.length === 0) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proposals.sort((a: any, b: any) => String(b.lastModifiedDateTime).localeCompare(String(a.lastModifiedDateTime)));

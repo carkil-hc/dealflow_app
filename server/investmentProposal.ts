@@ -108,7 +108,7 @@ export const investmentProposalRouter = Router();
 // Files). Synchronous within the request — reliable on App Service, and fast
 // enough to fit the HTTP timeout by using Sonnet.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildProposalAttachment(id: string): Promise<any> {
+async function buildProposalAttachment(id: string, version = 1): Promise<any> {
     const pool = await getPool();
     const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
     if (result.recordset.length === 0) throw new Error('Company not found');
@@ -178,9 +178,10 @@ ${JSON.stringify(fields, null, 2)}`,
     const base64 = await buildProposalDocx(c.name, data);
     const bytes = Buffer.from(base64, 'base64');
     const safe = c.name.replace(/[^a-z0-9 _-]/gi, '_');
+    const suffix = version > 1 ? ` (v${version})` : '';
     const attachment = {
       id: `${Date.now()}-ip`,
-      name: `${safe} — Investment Proposal.docx`,
+      name: `${safe} — Investment Proposal${suffix}.docx`,
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       size: bytes.length,
       uploadedAt: new Date().toISOString(),
@@ -194,7 +195,8 @@ ${JSON.stringify(fields, null, 2)}`,
 // best-effort uploads a copy to SharePoint (Investment proposals/<company>/).
 investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (req, res) => {
   try {
-    const { attachment, companyName } = await buildProposalAttachment(req.params.id);
+    const version = Math.max(1, Number(req.body?.version) || 1);
+    const { attachment, companyName } = await buildProposalAttachment(req.params.id, version);
 
     let sharePoint: { url: string } | { error: string } | null = null;
     if (sharePointConfigured()) {

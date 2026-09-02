@@ -36,7 +36,8 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   }, []);
 
   // A proposal exists if we just generated one, or one is already in Files.
-  const hasProposal = !!done || form.attachments.some((a) => /Investment Proposal\.docx$/i.test(a.name));
+  const proposalCount = form.attachments.filter((a) => /Investment Proposal.*\.docx$/i.test(a.name)).length;
+  const hasProposal = !!done || proposalCount > 0;
   const twoChosen = !!signer1 && !!signer2 && signer1 !== signer2;
   const canSend = hasProposal && twoChosen && !sending;
 
@@ -53,7 +54,12 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
     setDone(null);
     setSp(null);
     try {
-      const res = await fetch(`/api/companies/${form.id}/investment-proposal`, { method: 'POST' });
+      const version = proposalCount + 1; // v1 = first, v2+ get a suffix
+      const res = await fetch(`/api/companies/${form.id}/investment-proposal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error || 'Generation failed');
@@ -61,9 +67,8 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
       const { attachment, sharePoint } = await res.json() as { attachment: Attachment; sharePoint: { url: string } | { error: string } | null };
       setSp(sharePoint);
       const now = new Date().toISOString();
-      // Replace any prior proposal so there's always exactly one in Files.
-      const withoutOld = form.attachments.filter((a) => !/Investment Proposal\.docx$/i.test(a.name));
-      let updated: Company = { ...form, attachments: [...withoutOld, attachment] };
+      // Keep prior versions; each regeneration is saved as a new (vN) file.
+      let updated: Company = { ...form, attachments: [...form.attachments, attachment] };
       updated = addHistory(updated, { type: 'file_added', timestamp: now, user: currentUser, detail: attachment.name });
       updated = { ...updated, updatedAt: now };
       setForm(updated);
@@ -147,14 +152,15 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
         {confirmRegen && (
           <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
             <div className="text-xs text-amber-800">
-              An investment proposal already exists for this company. Generating again creates a new version and overwrites the SharePoint copy.
+              An investment proposal already exists for this company. Generating again saves a new
+              version (v{proposalCount + 1}) alongside the existing one, in both Files and SharePoint.
             </div>
             <div className="flex items-center gap-2 mt-2">
               <button
                 onClick={() => void generate()}
                 className="text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-sm transition-colors"
               >
-                Generate a new version
+                Generate v{proposalCount + 1}
               </button>
               <button
                 onClick={() => setConfirmRegen(false)}
