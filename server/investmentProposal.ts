@@ -10,7 +10,7 @@ import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
+import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth } from './docusign.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -217,6 +217,11 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
 // GET /api/signers — the server-authoritative signer allowlist for the dropdown.
 investmentProposalRouter.get('/api/signers', (_req, res) => {
   res.json({ signers: SIGNERS });
+});
+
+// GET /api/docusign/health — diagnostic: confirms JWT auth works (no document).
+investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
+  res.json(await docusignHealth());
 });
 
 // POST /api/companies/:id/investment-proposal/send-for-signing
