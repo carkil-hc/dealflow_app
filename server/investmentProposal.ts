@@ -9,6 +9,7 @@ import {
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
+import { saveToSharePoint, sharePointConfigured } from './sharepoint.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -170,7 +171,7 @@ ${JSON.stringify(fields, null, 2)}`,
     const base64 = await buildProposalDocx(c.name, data);
     const bytes = Buffer.from(base64, 'base64');
     const safe = c.name.replace(/[^a-z0-9 _-]/gi, '_');
-    return {
+    const attachment = {
       id: `${Date.now()}-ip`,
       name: `${safe} — Investment Proposal.docx`,
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -178,14 +179,28 @@ ${JSON.stringify(fields, null, 2)}`,
       uploadedAt: new Date().toISOString(),
       data: base64,
     };
+    return { attachment, companyName: c.name };
 }
 
 // POST /api/companies/:id/investment-proposal
-// Drafts the proposal and returns it; the client saves it to the Files tab.
+// Drafts the proposal, returns it (the client saves it to the Files tab), and
+// best-effort uploads a copy to SharePoint (Investment proposals/<company>/).
 investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (req, res) => {
   try {
-    const attachment = await buildProposalAttachment(req.params.id);
-    res.json({ attachment });
+    const { attachment, companyName } = await buildProposalAttachment(req.params.id);
+
+    let sharePoint: { url: string } | { error: string } | null = null;
+    if (sharePointConfigured()) {
+      try {
+        const url = await saveToSharePoint(companyName, attachment.name, attachment.data, attachment.type);
+        sharePoint = { url };
+      } catch (e) {
+        console.error('[investment-proposal] SharePoint upload failed:', e instanceof Error ? e.message : e);
+        sharePoint = { error: e instanceof Error ? e.message : 'SharePoint upload failed' };
+      }
+    }
+
+    res.json({ attachment, sharePoint });
   } catch (err) {
     console.error('[investment-proposal]', err);
     res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });

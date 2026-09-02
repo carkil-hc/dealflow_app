@@ -15,18 +15,21 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Attachment | null>(null);
+  const [sp, setSp] = useState<{ url: string } | { error: string } | null>(null);
 
   const generate = async () => {
     setGenerating(true);
     setErr('');
     setDone(null);
+    setSp(null);
     try {
       const res = await fetch(`/api/companies/${form.id}/investment-proposal`, { method: 'POST' });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.error || 'Generation failed');
       }
-      const { attachment } = await res.json() as { attachment: Attachment };
+      const { attachment, sharePoint } = await res.json() as { attachment: Attachment; sharePoint: { url: string } | { error: string } | null };
+      setSp(sharePoint);
       const now = new Date().toISOString();
       let updated: Company = { ...form, attachments: [...form.attachments, attachment] };
       updated = addHistory(updated, { type: 'file_added', timestamp: now, user: currentUser, detail: attachment.name });
@@ -84,6 +87,16 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
               <Download className="w-3 h-3" /> Download
             </button>
           </div>
+        )}
+        {done && sp && 'url' in sp && (
+          <div className="px-4 pb-3 -mt-1">
+            <a href={sp.url} target="_blank" rel="noopener noreferrer" className="text-xs text-hc-teal hover:underline">
+              Also saved to SharePoint ↗
+            </a>
+          </div>
+        )}
+        {done && sp && 'error' in sp && (
+          <div className="px-4 pb-3 -mt-1 text-xs text-amber-600">Saved to Files, but the SharePoint copy failed (permissions still propagating?).</div>
         )}
         {err && <div className="px-4 py-2.5 text-xs text-red-500">{err}</div>}
       </div>
