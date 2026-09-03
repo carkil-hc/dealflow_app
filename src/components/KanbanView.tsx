@@ -68,7 +68,7 @@ export default function KanbanView({ companies, onSelect, onStageChange, onAdd }
             onDragOver={e => handleDragOver(e, stage)}
             onDragLeave={handleDragLeave}
             onDrop={e => handleDrop(e, stage)}
-            className={`flex-none w-[272px] h-full flex flex-col border overflow-hidden transition-colors ${
+            className={`flex-1 min-w-[272px] h-full flex flex-col border overflow-hidden transition-colors ${
               isOver && !isDraggingFromHere
                 ? 'border-hc-teal bg-hc-teal-50/30'
                 : 'border-gray-200 bg-white'
