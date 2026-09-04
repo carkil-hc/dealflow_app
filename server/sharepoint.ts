@@ -102,6 +102,30 @@ export async function getProposalFromSharePoint(companyName: string): Promise<{ 
   return { name: item.name, base64: buf.toString('base64') };
 }
 
+// Diagnostic: exercise the exact Graph path the feature needs, as the managed
+// identity, and report which step (if any) the current permission rejects.
+// Creates a tiny test file in a "__dealflow_healthcheck__" subfolder, then
+// removes it. Returns step-by-step results; never throws.
+export async function sharePointHealth(): Promise<{ ok: boolean; step: string; detail?: string; folder?: string }> {
+  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
+  if (!shareUrl) return { ok: false, step: 'config', detail: 'SHAREPOINT_PROPOSALS_FOLDER_URL unset' };
+  let step = 'token';
+  try {
+    await graphToken();
+    step = 'resolve-folder';
+    const { driveId, itemId } = await resolveParentFolder(shareUrl);
+    step = 'create-subfolder';
+    const folderId = await ensureSubfolder(driveId, itemId, '__dealflow_healthcheck__');
+    step = 'upload';
+    await uploadFile(driveId, folderId, 'healthcheck.txt', Buffer.from('ok', 'utf8'), 'text/plain');
+    step = 'cleanup';
+    await graph(`/drives/${driveId}/items/${folderId}`, { method: 'DELETE' });
+    return { ok: true, step: 'done', folder: shareUrl.slice(0, 60) + '…' };
+  } catch (e) {
+    return { ok: false, step, detail: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // Save a generated document to `<configured folder>/<company>/<fileName>` in
 // SharePoint. Returns the web URL. Throws on any Graph/permission error.
 export async function saveToSharePoint(companyName: string, fileName: string, base64: string, contentType: string): Promise<string> {
