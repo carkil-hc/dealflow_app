@@ -5,6 +5,8 @@ export interface Signer { name: string; email: string; }
 export const SIGNERS: Signer[] = [
   { name: 'Mårten Steen', email: 'marten.steen@healthcap.eu' },
   { name: 'Kristina Ekberg', email: 'kristina.ekberg@healthcap.eu' },
+  { name: 'Carl Kilander', email: 'carl.kilander@healthcap.eu' },
+  { name: 'Björn Odlander', email: 'bjorn.odlander@healthcap.eu' },
 ];
 
 // ── Config (secrets from env; account/base pre-filled from discovery) ────────
