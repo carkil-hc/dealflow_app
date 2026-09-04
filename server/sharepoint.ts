@@ -40,8 +40,25 @@ function safeName(name: string): string {
   return name.replace(/["*:<>?/\\|]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 200) || 'Untitled';
 }
 
-// Resolve the configured folder (a sharing URL) to its drive + item id.
-async function resolveParentFolder(shareUrl: string): Promise<{ driveId: string; itemId: string }> {
+// Resolve the target folder to its drive + driveItem id.
+//
+// Preferred path (least-privilege): the app is granted item-scoped access
+// (ListItems.SelectedOperations.Selected) to one folder, identified by
+// site/list/item ids. We map that list item to its driveItem so uploads use the
+// drive API. Falls back to a sharing URL when the ids aren't configured.
+async function resolveParentFolder(): Promise<{ driveId: string; itemId: string }> {
+  const siteId = process.env.SHAREPOINT_SITE_ID;
+  const listId = process.env.SHAREPOINT_LIST_ID;
+  const itemId = process.env.SHAREPOINT_ITEM_ID;
+  if (siteId && listId && itemId) {
+    const li = await graph(`/sites/${siteId}/lists/${listId}/items/${itemId}?$expand=driveItem`);
+    const di = li?.driveItem;
+    const driveId = di?.parentReference?.driveId;
+    if (!driveId || !di?.id) throw new Error('Could not map the granted list item to a driveItem');
+    return { driveId, itemId: di.id };
+  }
+  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
+  if (!shareUrl) throw new Error('SharePoint not configured (set SHAREPOINT_SITE_ID/LIST_ID/ITEM_ID)');
   const item = await graph(`/shares/${encodeShareUrl(shareUrl)}/driveItem?$select=id,parentReference`);
   const driveId = item?.parentReference?.driveId;
   if (!driveId || !item?.id) throw new Error('Could not resolve the SharePoint folder from the configured share URL');
@@ -74,15 +91,15 @@ async function uploadFile(driveId: string, folderId: string, fileName: string, b
 }
 
 export function sharePointConfigured(): boolean {
-  return !!process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
+  const { SHAREPOINT_SITE_ID, SHAREPOINT_LIST_ID, SHAREPOINT_ITEM_ID, SHAREPOINT_PROPOSALS_FOLDER_URL } = process.env;
+  return !!((SHAREPOINT_SITE_ID && SHAREPOINT_LIST_ID && SHAREPOINT_ITEM_ID) || SHAREPOINT_PROPOSALS_FOLDER_URL);
 }
 
 // Fetch the most recent "… Investment Proposal.docx" for a company from its
 // SharePoint subfolder. Returns null if none is found.
 export async function getProposalFromSharePoint(companyName: string): Promise<{ name: string; base64: string } | null> {
-  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
-  if (!shareUrl) throw new Error('SharePoint not configured');
-  const { driveId, itemId } = await resolveParentFolder(shareUrl);
+  if (!sharePointConfigured()) throw new Error('SharePoint not configured');
+  const { driveId, itemId } = await resolveParentFolder();
   const kids = await graph(`/drives/${driveId}/items/${itemId}/children?$select=id,name,folder&$top=999`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const folder = (kids?.value ?? []).find((c: any) => c.folder && c.name === safeName(companyName));
@@ -107,20 +124,19 @@ export async function getProposalFromSharePoint(companyName: string): Promise<{ 
 // Creates a tiny test file in a "__dealflow_healthcheck__" subfolder, then
 // removes it. Returns step-by-step results; never throws.
 export async function sharePointHealth(): Promise<{ ok: boolean; step: string; detail?: string; folder?: string }> {
-  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
-  if (!shareUrl) return { ok: false, step: 'config', detail: 'SHAREPOINT_PROPOSALS_FOLDER_URL unset' };
+  if (!sharePointConfigured()) return { ok: false, step: 'config', detail: 'SharePoint IDs unset (SHAREPOINT_SITE_ID/LIST_ID/ITEM_ID)' };
   let step = 'token';
   try {
     await graphToken();
     step = 'resolve-folder';
-    const { driveId, itemId } = await resolveParentFolder(shareUrl);
+    const { driveId, itemId } = await resolveParentFolder();
     step = 'create-subfolder';
     const folderId = await ensureSubfolder(driveId, itemId, '__dealflow_healthcheck__');
     step = 'upload';
     await uploadFile(driveId, folderId, 'healthcheck.txt', Buffer.from('ok', 'utf8'), 'text/plain');
     step = 'cleanup';
     await graph(`/drives/${driveId}/items/${folderId}`, { method: 'DELETE' });
-    return { ok: true, step: 'done', folder: shareUrl.slice(0, 60) + '…' };
+    return { ok: true, step: 'done' };
   } catch (e) {
     return { ok: false, step, detail: e instanceof Error ? e.message : String(e) };
   }
@@ -129,9 +145,8 @@ export async function sharePointHealth(): Promise<{ ok: boolean; step: string; d
 // Save a generated document to `<configured folder>/<company>/<fileName>` in
 // SharePoint. Returns the web URL. Throws on any Graph/permission error.
 export async function saveToSharePoint(companyName: string, fileName: string, base64: string, contentType: string): Promise<string> {
-  const shareUrl = process.env.SHAREPOINT_PROPOSALS_FOLDER_URL;
-  if (!shareUrl) throw new Error('SharePoint not configured (SHAREPOINT_PROPOSALS_FOLDER_URL unset)');
-  const { driveId, itemId } = await resolveParentFolder(shareUrl);
+  if (!sharePointConfigured()) throw new Error('SharePoint not configured (SHAREPOINT_SITE_ID/LIST_ID/ITEM_ID unset)');
+  const { driveId, itemId } = await resolveParentFolder();
   const companyFolderId = await ensureSubfolder(driveId, itemId, safeName(companyName));
   return uploadFile(driveId, companyFolderId, fileName, Buffer.from(base64, 'base64'), contentType);
 }
