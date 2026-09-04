@@ -50,27 +50,6 @@ async function getAccessToken(): Promise<string> {
   return accessToken;
 }
 
-// Diagnostic: perform only the JWT token exchange to confirm the key/consent
-// are correct, without needing a document. Never returns the token itself.
-export async function docusignHealth(): Promise<{ ok: boolean; accountId?: string; baseUri?: string; error?: string; env?: Record<string, number> }> {
-  // Presence report from the live process env (lengths only, never values).
-  const env = {
-    DOCUSIGN_INTEGRATION_KEY: (process.env.DOCUSIGN_INTEGRATION_KEY ?? '').length,
-    DOCUSIGN_PRIVATE_KEY: (process.env.DOCUSIGN_PRIVATE_KEY ?? '').length,
-    DOCUSIGN_ACCOUNT_ID: (process.env.DOCUSIGN_ACCOUNT_ID ?? '').length,
-    DOCUSIGN_USER_ID: (process.env.DOCUSIGN_USER_ID ?? '').length,
-    DOCUSIGN_OAUTH_HOST: (process.env.DOCUSIGN_OAUTH_HOST ?? '').length,
-    DOCUSIGN_BASE_URI: (process.env.DOCUSIGN_BASE_URI ?? '').length,
-  };
-  if (!docusignConfigured()) return { ok: false, error: 'Not configured: DOCUSIGN_INTEGRATION_KEY and/or DOCUSIGN_PRIVATE_KEY are missing.', env };
-  try {
-    await getAccessToken();
-    return { ok: true, accountId: cfg.accountId, baseUri: cfg.baseUri, env };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e), env };
-  }
-}
-
 // ── Send an envelope ─────────────────────────────────────────────────────────
 // The document should contain the invisible anchors {{sig1}} / {{sig2}} so
 // DocuSign places each signer's signature block automatically.

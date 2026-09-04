@@ -9,8 +9,8 @@ import {
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
-import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint, sharePointHealth } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth } from './docusign.js';
+import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
+import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -221,16 +221,6 @@ investmentProposalRouter.get('/api/signers', (_req, res) => {
   res.json({ signers: SIGNERS });
 });
 
-// GET /api/docusign/health — diagnostic: confirms JWT auth works (no document).
-investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
-  res.json(await docusignHealth());
-});
-
-// GET /api/sharepoint/health — diagnostic: confirms the managed identity can
-// resolve, write to, and clean up the configured proposals folder.
-investmentProposalRouter.get('/api/sharepoint/health', async (_req, res) => {
-  res.json(await sharePointHealth());
-});
 
 // POST /api/companies/:id/investment-proposal/send-for-signing
 // Body: { signerEmails: string[] } — must be exactly two, both on the allowlist.
