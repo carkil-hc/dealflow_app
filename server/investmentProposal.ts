@@ -11,6 +11,7 @@ import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
+import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -141,9 +142,16 @@ async function buildProposalAttachment(id: string, version = 1): Promise<any> {
       askAmount: c.askAmount, valuation: c.valuation, location: c.location, website: c.website, leadContact: c.leadContact,
     };
 
+    // Guidance accumulated from past reviewer edits (empty until the first is learned).
+    const guide = await getDraftingGuide();
+    const guideBlock = guide
+      ? `\n\nLEARNED DRAFTING GUIDANCE — distilled from how HealthCap reviewers have edited past AI drafts before sending them for signing. Follow it closely:\n${guide}\n`
+      : '';
+
     content.push({
       type: 'text',
-      text: `You are an investment professional at HealthCap, a Nordic life-science VC, drafting an Investment Proposal for the company below, to be reviewed by the investment committee. Reproduce HealthCap's standard proposal structure exactly. Return ONLY a valid JSON object:
+      text: `You are an investment professional at HealthCap, a Nordic life-science VC, drafting an Investment Proposal for the company below, to be reviewed by the investment committee. Reproduce HealthCap's standard proposal structure exactly.${guideBlock}
+Return ONLY a valid JSON object:
 {
   "date": "${today}",
   "location": "country/city",
@@ -187,6 +195,15 @@ ${JSON.stringify(fields, null, 2)}`,
       uploadedAt: new Date().toISOString(),
       data: base64,
     };
+
+    // Store the generated draft's text so a later human-edited version (sent for
+    // signing) can be compared against it to learn drafting improvements.
+    try {
+      await saveDraft(id, version, await extractDocxText(bytes));
+    } catch (e) {
+      console.error('[learning] saveDraft failed:', e instanceof Error ? e.message : e);
+    }
+
     return { attachment, companyName: c.name };
 }
 
@@ -261,6 +278,20 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-s
       emailSubject: `Investment Proposal for signature – ${companyName}`,
       signers: signers as { name: string; email: string }[],
     });
+
+    // Learn from any human edits: compare the AI draft to this finalized version.
+    // Best-effort and synchronous (App Service kills post-response work); never
+    // let it affect the signing result. The version is parsed from the filename.
+    try {
+      const ver = Number(proposal.name.match(/\(v(\d+)\)/i)?.[1] ?? 1);
+      const generatedText = await getDraft(req.params.id, ver);
+      if (generatedText) {
+        const finalText = await extractDocxText(Buffer.from(proposal.base64, 'base64'));
+        await learnFromEdit({ companyName, generatedText, finalText });
+      }
+    } catch (e) {
+      console.error('[learning] learnFromEdit failed:', e instanceof Error ? e.message : e);
+    }
 
     res.json({ envelopeId, signers: signers.map((s) => s!.name), document: proposal.name });
   } catch (err) {

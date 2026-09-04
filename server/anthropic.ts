@@ -10,6 +10,20 @@ interface AskJsonOpts {
   array?: boolean; // extract a top-level [...] array instead of a {...} object
 }
 
+// Call Claude and return its plain-text reply (no JSON parsing).
+export async function askClaudeText(opts: { content: string | Anthropic.MessageParam['content']; model?: string; maxTokens?: number }): Promise<string> {
+  const message = await anthropic.messages.create({
+    model: opts.model ?? 'claude-sonnet-4-5',
+    max_tokens: opts.maxTokens ?? 2048,
+    messages: [{ role: 'user', content: opts.content }],
+  });
+  return message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('')
+    .trim();
+}
+
 // Call Claude and parse the single JSON value out of its reply. Centralizes the
 // "create message → find text block → regex the JSON → JSON.parse" pattern used
 // by the ingest and report endpoints.
