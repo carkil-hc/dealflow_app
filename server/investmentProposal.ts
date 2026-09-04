@@ -11,7 +11,7 @@ import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
-import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText } from './proposalLearning.js';
+import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -236,6 +236,40 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
 // GET /api/signers — the server-authoritative signer allowlist for the dropdown.
 investmentProposalRouter.get('/api/signers', (_req, res) => {
   res.json({ signers: SIGNERS });
+});
+
+// ── Drafting guide (house-style learning) ────────────────────────────────────
+// GET current guide text.
+investmentProposalRouter.get('/api/proposal-guide', async (_req, res) => {
+  res.json({ guide: await getDraftingGuide() });
+});
+
+// POST past proposals (base64 files) to seed/augment the guide from exemplars.
+investmentProposalRouter.post('/api/proposal-guide/seed', async (req, res) => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const files: any[] = Array.isArray(req.body?.files) ? req.body.files : [];
+    if (files.length === 0) return res.status(400).json({ error: 'No files provided.' });
+    const examples: { name: string; text: string }[] = [];
+    for (const f of files) {
+      try {
+        const text = await extractText(String(f.name ?? 'proposal'), String(f.data ?? ''));
+        if (text) examples.push({ name: String(f.name ?? 'proposal'), text });
+      } catch { /* skip unreadable file */ }
+    }
+    if (examples.length === 0) return res.status(400).json({ error: 'Could not read text from the uploaded files.' });
+    await seedGuideFromExamples(examples);
+    res.json({ ok: true, learnedFrom: examples.map((e) => e.name), guide: await getDraftingGuide() });
+  } catch (err) {
+    console.error('[proposal-guide/seed]', err);
+    res.status(500).json({ error: 'Failed to seed the drafting guide', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// DELETE the guide (start over).
+investmentProposalRouter.delete('/api/proposal-guide', async (_req, res) => {
+  await resetGuide();
+  res.json({ ok: true });
 });
 
 

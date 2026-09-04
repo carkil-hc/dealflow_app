@@ -14,6 +14,16 @@ export async function extractDocxText(bytes: Buffer): Promise<string> {
   return String(parsed?.toText?.() ?? parsed ?? '').trim();
 }
 
+// Extract text from an uploaded proposal (PDF, DOCX, or PPTX), chosen by extension.
+export async function extractText(name: string, base64: string): Promise<string> {
+  const lower = name.toLowerCase();
+  const fileType = lower.endsWith('.pdf') ? 'pdf'
+    : lower.endsWith('.pptx') ? 'pptx'
+    : 'docx';
+  const parsed = await parseOffice(Buffer.from(base64, 'base64'), { fileType });
+  return String(parsed?.toText?.() ?? parsed ?? '').trim();
+}
+
 // Tables self-create on first use — no manual migration needed at deploy.
 let tablesReady = false;
 async function ensureTables(): Promise<void> {
@@ -112,4 +122,34 @@ ${opts.finalText.slice(0, 28000)}
 Return ONLY the updated guide as Markdown, with no preamble or commentary.`;
   const updated = await askClaudeText({ content: prompt, model: 'claude-sonnet-4-5', maxTokens: 4000 });
   if (updated && updated.length > 20) await saveGuide(updated);
+}
+
+// Seed / augment the guide from finalized exemplar proposals (no AI draft to
+// diff against — study them as gold-standard house style).
+export async function seedGuideFromExamples(examples: { name: string; text: string }[]): Promise<void> {
+  const current = await getDraftingGuide();
+  const joined = examples
+    .map((e, i) => `=== EXAMPLE ${i + 1}: ${e.name} ===\n${e.text.slice(0, 20000)}`)
+    .join('\n\n');
+  const prompt = `You maintain a concise DRAFTING GUIDE that teaches an AI to draft HealthCap investment proposals in the correct house style, so they need minimal human editing.
+
+Below are ${examples.length} finalized, human-written HealthCap investment proposal(s), considered gold-standard. Study them and extract GENERAL, reusable drafting guidance: structure and section order, tone and voice, typical length, level of detail, formatting and house conventions, what each section should and should not contain, and recurring phrasing patterns. IGNORE company-specific facts, figures and names — capture only what transfers to a NEW, unrelated proposal.
+
+Merge your findings into the existing guide. Keep it concise (max ~1200 words), deduplicated, and grouped by theme.
+
+=== CURRENT GUIDE ===
+${current || '(empty — you are starting the guide)'}
+
+${joined}
+
+Return ONLY the updated guide as Markdown, with no preamble or commentary.`;
+  const updated = await askClaudeText({ content: prompt, model: 'claude-sonnet-4-5', maxTokens: 4000 });
+  if (updated && updated.length > 20) await saveGuide(updated);
+}
+
+// Clear the guide entirely (start over).
+export async function resetGuide(): Promise<void> {
+  await ensureTables();
+  const pool = await getPool();
+  await pool.request().query('DELETE FROM proposal_guide WHERE id = 1');
 }
