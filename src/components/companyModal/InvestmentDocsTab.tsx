@@ -1,5 +1,5 @@
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
-import { FileSignature, Loader2, Download, Check, PenLine, BookOpen, Upload, ChevronDown, ChevronRight } from 'lucide-react';
+import { Dispatch, SetStateAction, useEffect, useState } from 'react';
+import { FileSignature, Loader2, Download, Check, PenLine } from 'lucide-react';
 import { Company, Attachment } from '../../types';
 import { addHistory } from './helpers';
 import { downloadBase64 } from '../../ui';
@@ -28,68 +28,12 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const [sent, setSent] = useState<{ envelopeId: string; signers: string[] } | null>(null);
   const [confirmRegen, setConfirmRegen] = useState(false);
 
-  // Drafting guide (house-style learning, global across all proposals)
-  const [guide, setGuide] = useState('');
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [seeding, setSeeding] = useState(false);
-  const [seedMsg, setSeedMsg] = useState('');
-  const [seedErr, setSeedErr] = useState('');
-  const guideFileRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     fetch('/api/signers')
       .then((r) => r.json())
       .then((d) => setSigners(d.signers ?? []))
       .catch(() => setSigners([]));
-    fetch('/api/proposal-guide')
-      .then((r) => r.json())
-      .then((d) => setGuide(d.guide ?? ''))
-      .catch(() => setGuide(''));
   }, []);
-
-  const seedGuide = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    setSeeding(true);
-    setSeedErr('');
-    setSeedMsg('');
-    try {
-      const files = await Promise.all(Array.from(fileList).map(
-        (f) => new Promise<{ name: string; data: string }>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve({ name: f.name, data: String(reader.result).split(',')[1] ?? '' });
-          reader.onerror = reject;
-          reader.readAsDataURL(f);
-        }),
-      ));
-      const res = await fetch('/api/proposal-guide/seed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || d.detail || 'Could not learn from those files.');
-      setGuide(d.guide ?? '');
-      setSeedMsg(`Learned from ${(d.learnedFrom ?? []).length} proposal(s). The guide now shapes every new draft.`);
-      setGuideOpen(true);
-    } catch (e) {
-      setSeedErr(e instanceof Error ? e.message : 'Could not learn from those files.');
-    } finally {
-      setSeeding(false);
-      if (guideFileRef.current) guideFileRef.current.value = '';
-    }
-  };
-
-  const resetGuide = async () => {
-    setSeedErr('');
-    setSeedMsg('');
-    try {
-      await fetch('/api/proposal-guide', { method: 'DELETE' });
-      setGuide('');
-      setSeedMsg('Drafting guide cleared.');
-    } catch {
-      setSeedErr('Could not reset the guide.');
-    }
-  };
 
   // A proposal exists if we just generated one, or one is already in Files.
   const proposalCount = form.attachments.filter((a) => /Investment Proposal.*\.docx$/i.test(a.name)).length;
@@ -293,65 +237,6 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
             </div>
           )}
           {sendErr && <div className="text-xs text-red-500 mt-2">{sendErr}</div>}
-        </div>
-      </div>
-
-      {/* Drafting guide — house style learned from edits + example proposals (global) */}
-      <div className="border border-gray-200 bg-white rounded-sm">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-[#1A1A1A] flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-hc-teal" /> Drafting guide
-            </div>
-            <div className="text-xs text-gray-400 mt-0.5">
-              House style that shapes every proposal draft. It grows automatically from edits made before signing —
-              and you can seed it by uploading past proposals to learn from. Applies to all companies.
-            </div>
-          </div>
-          <label className={`flex items-center gap-1.5 shrink-0 border text-xs font-medium px-3 py-1.5 rounded-sm transition-colors cursor-pointer ${
-            seeding ? 'border-gray-200 text-gray-300' : 'border-hc-teal text-hc-teal hover:bg-hc-teal-50'
-          }`}>
-            {seeding
-              ? <><Loader2 className="w-3 h-3 animate-spin" /> Learning…</>
-              : <><Upload className="w-3 h-3" /> Upload past proposals</>}
-            <input
-              ref={guideFileRef}
-              type="file"
-              accept=".pdf,.docx,.pptx"
-              multiple
-              disabled={seeding}
-              onChange={(e) => seedGuide(e.target.files)}
-              className="hidden"
-            />
-          </label>
-        </div>
-
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-500">
-              {guide
-                ? <>Guide is active <span className="text-gray-400">({guide.length.toLocaleString()} chars)</span></>
-                : 'No guide yet — upload past proposals or let it build from edits over time.'}
-            </span>
-            <div className="flex items-center gap-3 shrink-0">
-              {guide && (
-                <button onClick={() => setGuideOpen((o) => !o)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-hc-teal transition-colors">
-                  {guideOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  {guideOpen ? 'Hide' : 'View'}
-                </button>
-              )}
-              {guide && (
-                <button onClick={resetGuide} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Reset</button>
-              )}
-            </div>
-          </div>
-          {guideOpen && guide && (
-            <pre className="mt-2 max-h-72 overflow-auto text-[11px] leading-relaxed text-gray-600 bg-[#FAFAFA] border border-gray-100 rounded-sm p-3 whitespace-pre-wrap font-sans">
-              {guide}
-            </pre>
-          )}
-          {seedMsg && <div className="text-xs text-green-700 mt-2 flex items-center gap-1.5"><Check className="w-3.5 h-3.5 shrink-0" />{seedMsg}</div>}
-          {seedErr && <div className="text-xs text-red-500 mt-2">{seedErr}</div>}
         </div>
       </div>
 
