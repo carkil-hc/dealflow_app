@@ -3,6 +3,7 @@ import { FileSignature, Loader2, Download, Check, PenLine } from 'lucide-react';
 import { Company, Attachment } from '../../types';
 import { addHistory } from './helpers';
 import { downloadBase64 } from '../../ui';
+import RecommendationCard from './RecommendationCard';
 
 interface Props {
   form: Company;
@@ -240,13 +241,8 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
         </div>
       </div>
 
-      {/* Investment Recommendation — next phase */}
-      <div className="border border-dashed border-gray-200 bg-gray-50/60 rounded-sm px-4 py-3">
-        <div className="text-sm font-semibold text-gray-500">Investment Recommendation</div>
-        <div className="text-xs text-gray-400 mt-0.5">
-          Generated once a deal progresses to investment — coming next.
-        </div>
-      </div>
+      {/* Investment Recommendation */}
+      <RecommendationCard form={form} setForm={setForm} onAutoSave={onAutoSave} currentUser={currentUser} signers={signers} />
     </div>
   );
 }

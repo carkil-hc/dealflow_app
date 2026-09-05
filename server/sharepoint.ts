@@ -97,8 +97,12 @@ export function sharePointConfigured(): boolean {
 
 // Fetch the most recent "… Investment Proposal.docx" for a company from its
 // SharePoint subfolder. Returns null if none is found.
-export async function getProposalFromSharePoint(companyName: string): Promise<{ name: string; base64: string } | null> {
+export async function getProposalFromSharePoint(
+  companyName: string,
+  kind: 'proposal' | 'recommendation' = 'proposal',
+): Promise<{ name: string; base64: string } | null> {
   if (!sharePointConfigured()) throw new Error('SharePoint not configured');
+  const pattern = kind === 'recommendation' ? /Investment Recommendation.*\.docx$/i : /Investment Proposal.*\.docx$/i;
   const { driveId, itemId } = await resolveParentFolder();
   const kids = await graph(`/drives/${driveId}/items/${itemId}/children?$select=id,name,folder&$top=999`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,7 +110,7 @@ export async function getProposalFromSharePoint(companyName: string): Promise<{ 
   if (!folder) return null;
   const files = await graph(`/drives/${driveId}/items/${folder.id}/children?$select=id,name,file,lastModifiedDateTime&$top=999`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const proposals = (files?.value ?? []).filter((f: any) => f.file && /Investment Proposal.*\.docx$/i.test(f.name));
+  const proposals = (files?.value ?? []).filter((f: any) => f.file && pattern.test(f.name));
   if (proposals.length === 0) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proposals.sort((a: any, b: any) => String(b.lastModifiedDateTime).localeCompare(String(a.lastModifiedDateTime)));

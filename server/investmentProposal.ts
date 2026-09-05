@@ -11,7 +11,7 @@ import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
-import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide } from './proposalLearning.js';
+import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -25,9 +25,10 @@ const OFFICE_FILETYPE: Record<string, string> = {
 };
 
 // ── Proposal structure (mirrors HealthCap's standard proposal) ───────────────
-interface ProposalData {
+export interface ProposalData {
   date: string;
   location: string;
+  companyInception?: string; // recommendations include an inception-year row
   syndicatingInvestors: string;
   amountAndTerms: string;
   preMoneyValuation: string;
@@ -63,12 +64,19 @@ function row(label: string, content: string): TableRow {
   return new TableRow({ children: [labelCell(label), contentCell(content)] });
 }
 
-export async function buildProposalDocx(companyName: string, d: ProposalData): Promise<string> {
+export async function buildProposalDocx(
+  companyName: string,
+  d: ProposalData,
+  opts: { title?: string; syndicateLabel?: string } = {},
+): Promise<string> {
+  const title = opts.title ?? 'Investment Proposal – HealthCap IX D AB and HealthCap IX E AB';
+  const syndicateLabel = opts.syndicateLabel ?? 'Syndicating investors';
   const rows: TableRow[] = [
     row('Date', d.date),
     row('Company', companyName),
     row('Location', d.location),
-    row('Syndicating investors', d.syndicatingInvestors),
+    ...(d.companyInception ? [row('Company inception', d.companyInception)] : []),
+    row(syndicateLabel, d.syndicatingInvestors),
     row('Amount and Terms', d.amountAndTerms),
     row('Pre-money Valuation', d.preMoneyValuation),
     row('Post-money Valuation', d.postMoneyValuation),
@@ -83,7 +91,7 @@ export async function buildProposalDocx(companyName: string, d: ProposalData): P
       children: [
         new Paragraph({
           spacing: { after: 240 },
-          children: [new TextRun({ text: 'Investment Proposal – HealthCap IX D AB and HealthCap IX E AB', bold: true, font: FONT, size: 24 })],
+          children: [new TextRun({ text: title, bold: true, font: FONT, size: 24 })],
         }),
         new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: NO_BORDERS, rows }),
         new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
@@ -143,7 +151,7 @@ async function buildProposalAttachment(id: string, version = 1): Promise<any> {
     };
 
     // Guidance accumulated from past reviewer edits (empty until the first is learned).
-    const guide = await getDraftingGuide();
+    const guide = await getDraftingGuide('proposal');
     const guideBlock = guide
       ? `\n\nLEARNED DRAFTING GUIDANCE — distilled from how HealthCap reviewers have edited past AI drafts before sending them for signing. Follow it closely:\n${guide}\n`
       : '';
@@ -199,7 +207,7 @@ ${JSON.stringify(fields, null, 2)}`,
     // Store the generated draft's text so a later human-edited version (sent for
     // signing) can be compared against it to learn drafting improvements.
     try {
-      await saveDraft(id, version, await extractDocxText(bytes));
+      await saveDraft(id, version, 'proposal', await extractDocxText(bytes));
     } catch (e) {
       console.error('[learning] saveDraft failed:', e instanceof Error ? e.message : e);
     }
@@ -238,14 +246,22 @@ investmentProposalRouter.get('/api/signers', (_req, res) => {
   res.json({ signers: SIGNERS });
 });
 
-// ── Drafting guide (house-style learning) ────────────────────────────────────
-// GET current guide text.
-investmentProposalRouter.get('/api/proposal-guide', async (_req, res) => {
-  res.json({ guide: await getDraftingGuide() });
+// ── Drafting guide (house-style learning, per document type) ─────────────────
+function parseDocType(v: unknown): DocType | null {
+  return v === 'proposal' || v === 'recommendation' ? v : null;
+}
+
+// GET current guide text for a doc type.
+investmentProposalRouter.get('/api/drafting-guide/:type', async (req, res) => {
+  const dt = parseDocType(req.params.type);
+  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
+  res.json({ guide: await getDraftingGuide(dt) });
 });
 
-// POST past proposals (base64 files) to seed/augment the guide from exemplars.
-investmentProposalRouter.post('/api/proposal-guide/seed', async (req, res) => {
+// POST past documents (base64 files) to seed/augment a guide from exemplars.
+investmentProposalRouter.post('/api/drafting-guide/:type/seed', async (req, res) => {
+  const dt = parseDocType(req.params.type);
+  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const files: any[] = Array.isArray(req.body?.files) ? req.body.files : [];
@@ -253,22 +269,24 @@ investmentProposalRouter.post('/api/proposal-guide/seed', async (req, res) => {
     const examples: { name: string; text: string }[] = [];
     for (const f of files) {
       try {
-        const text = await extractText(String(f.name ?? 'proposal'), String(f.data ?? ''));
-        if (text) examples.push({ name: String(f.name ?? 'proposal'), text });
+        const text = await extractText(String(f.name ?? dt), String(f.data ?? ''));
+        if (text) examples.push({ name: String(f.name ?? dt), text });
       } catch { /* skip unreadable file */ }
     }
     if (examples.length === 0) return res.status(400).json({ error: 'Could not read text from the uploaded files.' });
-    await seedGuideFromExamples(examples);
-    res.json({ ok: true, learnedFrom: examples.map((e) => e.name), guide: await getDraftingGuide() });
+    await seedGuideFromExamples(dt, examples);
+    res.json({ ok: true, learnedFrom: examples.map((e) => e.name), guide: await getDraftingGuide(dt) });
   } catch (err) {
-    console.error('[proposal-guide/seed]', err);
+    console.error('[drafting-guide/seed]', err);
     res.status(500).json({ error: 'Failed to seed the drafting guide', detail: err instanceof Error ? err.message : String(err) });
   }
 });
 
-// DELETE the guide (start over).
-investmentProposalRouter.delete('/api/proposal-guide', async (_req, res) => {
-  await resetGuide();
+// DELETE a guide (start over).
+investmentProposalRouter.delete('/api/drafting-guide/:type', async (req, res) => {
+  const dt = parseDocType(req.params.type);
+  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
+  await resetGuide(dt);
   res.json({ ok: true });
 });
 
@@ -318,10 +336,10 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-s
     // let it affect the signing result. The version is parsed from the filename.
     try {
       const ver = Number(proposal.name.match(/\(v(\d+)\)/i)?.[1] ?? 1);
-      const generatedText = await getDraft(req.params.id, ver);
+      const generatedText = await getDraft(req.params.id, ver, 'proposal');
       if (generatedText) {
         const finalText = await extractDocxText(Buffer.from(proposal.base64, 'base64'));
-        await learnFromEdit({ companyName, generatedText, finalText });
+        await learnFromEdit('proposal', { companyName, generatedText, finalText });
       }
     } catch (e) {
       console.error('[learning] learnFromEdit failed:', e instanceof Error ? e.message : e);
