@@ -15,6 +15,20 @@ export function ownerFromSender(from: string | undefined): string {
   return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 }
 
+// Derive the investment strategy from the extracted sector:
+//  - a company working on a pharmaceutical (drug) → Biotech
+//  - medical devices, health technologies, research tools, etc. → Tech
+//  - anything unclear → N/a
+export function strategyFromSector(sector: unknown): 'Biotech' | 'Tech' | 'N/a' {
+  switch (String(sector ?? '').trim().toLowerCase()) {
+    case 'pharmaceutical': return 'Biotech';
+    case 'medtech':
+    case 'healthtech':
+    case 'tool': return 'Tech';
+    default: return 'N/a';
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PaRaw = Record<string, any>;
 const getBytes = (a: PaRaw): string => a['contentBytes'] ?? a['ContentBytes'] ?? '';
@@ -85,7 +99,6 @@ async function processIngest(payload: Record<string, any>): Promise<void> {
   const company = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     stage: straightToReject ? 'rejected' : 'new',
-    strategy: 'N/a',
     owner: ownerFromSender(from),
     ...(straightToReject ? { rejectedReason: 'Straight to reject', rejectedAt: now } : {}),
     noteEntries: [],
@@ -94,6 +107,8 @@ async function processIngest(payload: Record<string, any>): Promise<void> {
     createdAt: now,
     updatedAt: now,
     ...extracted,
+    // Derived from the extracted sector; placed after the spread so it always wins.
+    strategy: strategyFromSector(extracted?.sector),
   };
 
   const pool = await getPool();
