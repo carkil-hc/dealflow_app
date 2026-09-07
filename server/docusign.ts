@@ -60,7 +60,7 @@ export async function sendForSignature(opts: {
   documentName: string;   // e.g. "Company — Investment Proposal.docx"
   emailSubject: string;
   signers: Signer[];
-}): Promise<{ envelopeId: string }> {
+}): Promise<{ envelopeId: string; tabDiagnostics: { name: string; signHereTabs: number }[] }> {
   const token = await getAccessToken();
   const envelope = {
     emailSubject: opts.emailSubject,
@@ -70,14 +70,22 @@ export async function sendForSignature(opts: {
         email: s.email,
         name: s.name,
         recipientId: String(i + 1),
-        routingOrder: String(i + 1),
+        // Same routing order for all signers → they can sign in parallel and
+        // every signer gets an immediate "action required" (sequential order
+        // would make later signers wait, showing no action yet).
+        routingOrder: '1',
         tabs: {
           signHereTabs: [{
             anchorString: `{{sig${i + 1}}}`,
             anchorUnits: 'pixels',
             anchorXOffset: '0',
             anchorYOffset: '0',
+            // Fail loudly (send errors) if the anchor is not found, rather than
+            // silently producing a signature-less envelope. The readback below
+            // also reports the placed-tab count per signer.
             anchorIgnoreIfNotPresent: 'false',
+            anchorCaseSensitive: 'false',
+            anchorMatchWholeWord: 'false',
           }],
         },
       })),
@@ -92,5 +100,31 @@ export async function sendForSignature(opts: {
   });
   if (!res.ok) throw new Error(`DocuSign envelope → ${res.status}: ${(await res.text()).slice(0, 400)}`);
   const data = await res.json();
-  return { envelopeId: data.envelopeId };
+  const envelopeId = data.envelopeId as string;
+
+  // Self-diagnose: read back the recipients' tabs so we can confirm each signer
+  // actually got a signature field (i.e. the anchors were found).
+  const tabDiagnostics: { name: string; signHereTabs: number }[] = [];
+  try {
+    const chk = await fetch(
+      `${cfg.baseUri}/restapi/v2.1/accounts/${cfg.accountId}/envelopes/${envelopeId}/recipients?include_tabs=true`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (chk.ok) {
+      const rc = await chk.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const s of (rc.signers ?? []) as any[]) {
+        const n = s?.tabs?.signHereTabs?.length ?? 0;
+        tabDiagnostics.push({ name: s.name, signHereTabs: n });
+      }
+      const missing = tabDiagnostics.filter(t => t.signHereTabs === 0).map(t => t.name);
+      if (missing.length) {
+        console.warn(`[docusign] envelope ${envelopeId}: NO signature field placed for ${missing.join(', ')} — anchor "{{sigN}}" not found in the document.`);
+      }
+    }
+  } catch (e) {
+    console.warn('[docusign] tab verification failed:', e instanceof Error ? e.message : e);
+  }
+
+  return { envelopeId, tabDiagnostics };
 }

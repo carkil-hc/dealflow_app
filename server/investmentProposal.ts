@@ -324,7 +324,7 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-s
       return res.status(400).json({ error: 'No investment proposal was found in SharePoint for this company. Generate one first.' });
     }
 
-    const { envelopeId } = await sendForSignature({
+    const { envelopeId, tabDiagnostics } = await sendForSignature({
       documentBase64: proposal.base64,
       documentName: proposal.name,
       emailSubject: `Investment Proposal for signature – ${companyName}`,
@@ -345,7 +345,7 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-s
       console.error('[learning] learnFromEdit failed:', e instanceof Error ? e.message : e);
     }
 
-    res.json({ envelopeId, signers: signers.map((s) => s!.name), document: proposal.name });
+    res.json({ envelopeId, signers: signers.map((s) => s!.name), document: proposal.name, tabDiagnostics });
   } catch (err) {
     console.error('[send-for-signing]', err);
     res.status(500).json({ error: 'Failed to send for signing', detail: err instanceof Error ? err.message : String(err) });

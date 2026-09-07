@@ -26,7 +26,7 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const [signer2, setSigner2] = useState('');
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState('');
-  const [sent, setSent] = useState<{ envelopeId: string; signers: string[] } | null>(null);
+  const [sent, setSent] = useState<{ envelopeId: string; signers: string[]; missingTabs: string[] } | null>(null);
   const [confirmRegen, setConfirmRegen] = useState(false);
 
   useEffect(() => {
@@ -95,7 +95,9 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || d.detail || 'Could not send for signing.');
-      setSent({ envelopeId: d.envelopeId, signers: d.signers ?? [] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const missingTabs = (d.tabDiagnostics ?? []).filter((t: any) => t.signHereTabs === 0).map((t: any) => t.name);
+      setSent({ envelopeId: d.envelopeId, signers: d.signers ?? [], missingTabs });
       const now = new Date().toISOString();
       const updated = addHistory({ ...form, updatedAt: now }, {
         type: 'note_added', timestamp: now, user: currentUser,
@@ -232,9 +234,16 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
             <div className="text-[11px] text-gray-400 mt-1.5">Generate a proposal first — the SharePoint copy is what gets sent for signing.</div>
           )}
           {sent && (
-            <div className="text-xs text-green-700 mt-2 flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 shrink-0" />
-              Sent to {sent.signers.join(' and ')} for signing.
+            <div className="mt-2">
+              <div className="text-xs text-green-700 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 shrink-0" />
+                Sent to {sent.signers.join(' and ')} for signing.
+              </div>
+              {sent.missingTabs.length > 0 && (
+                <div className="text-xs text-red-500 mt-1">
+                  Warning: no signature field was placed for {sent.missingTabs.join(' and ')} — the signature anchor wasn't found in the document. Regenerate the proposal and resend.
+                </div>
+              )}
             </div>
           )}
           {sendErr && <div className="text-xs text-red-500 mt-2">{sendErr}</div>}

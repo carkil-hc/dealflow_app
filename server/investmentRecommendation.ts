@@ -235,7 +235,7 @@ investmentRecommendationRouter.post('/api/companies/:id/investment-recommendatio
     const doc = await getProposalFromSharePoint(companyName, 'recommendation');
     if (!doc) return res.status(400).json({ error: 'No investment recommendation was found in SharePoint for this company. Generate one first.' });
 
-    const { envelopeId } = await sendForSignature({
+    const { envelopeId, tabDiagnostics } = await sendForSignature({
       documentBase64: doc.base64,
       documentName: doc.name,
       emailSubject: `Investment Recommendation for signature – ${companyName}`,
@@ -254,7 +254,7 @@ investmentRecommendationRouter.post('/api/companies/:id/investment-recommendatio
       console.error('[learning] learnFromEdit (recommendation) failed:', e instanceof Error ? e.message : e);
     }
 
-    res.json({ envelopeId, signers: signers.map((s) => s!.name), document: doc.name });
+    res.json({ envelopeId, signers: signers.map((s) => s!.name), document: doc.name, tabDiagnostics });
   } catch (err) {
     console.error('[recommendation/send-for-signing]', err);
     res.status(500).json({ error: 'Failed to send for signing', detail: err instanceof Error ? err.message : String(err) });

@@ -36,7 +36,7 @@ export default function RecommendationCard({ form, setForm, onAutoSave, currentU
   const [signer2, setSigner2] = useState('');
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState('');
-  const [sent, setSent] = useState<{ signers: string[] } | null>(null);
+  const [sent, setSent] = useState<{ signers: string[]; missingTabs: string[] } | null>(null);
 
   const recCount = form.attachments.filter((a) => /Investment Recommendation.*\.docx$/i.test(a.name)).length;
   const hasDoc = !!done || recCount > 0;
@@ -111,7 +111,9 @@ export default function RecommendationCard({ form, setForm, onAutoSave, currentU
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || d.detail || 'Could not send for signing.');
-      setSent({ signers: d.signers ?? [] });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const missingTabs = (d.tabDiagnostics ?? []).filter((t: any) => t.signHereTabs === 0).map((t: any) => t.name);
+      setSent({ signers: d.signers ?? [], missingTabs });
       const now = new Date().toISOString();
       const updated = addHistory({ ...form, updatedAt: now }, {
         type: 'note_added', timestamp: now, user: currentUser,
@@ -251,8 +253,15 @@ export default function RecommendationCard({ form, setForm, onAutoSave, currentU
           </button>
         </div>
         {sent && (
-          <div className="text-xs text-green-700 mt-2 flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 shrink-0" /> Sent to {sent.signers.join(' and ')} for signing.
+          <div className="mt-2">
+            <div className="text-xs text-green-700 flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 shrink-0" /> Sent to {sent.signers.join(' and ')} for signing.
+            </div>
+            {sent.missingTabs.length > 0 && (
+              <div className="text-xs text-red-500 mt-1">
+                Warning: no signature field was placed for {sent.missingTabs.join(' and ')} — the signature anchor wasn't found. Regenerate and resend.
+              </div>
+            )}
           </div>
         )}
         {sendErr && <div className="text-xs text-red-500 mt-2">{sendErr}</div>}
