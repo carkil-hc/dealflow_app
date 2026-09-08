@@ -10,7 +10,7 @@ import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
+import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth } from './docusign.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
@@ -239,6 +239,11 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
     console.error('[investment-proposal]', err);
     res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// GET /api/docusign/health — diagnostic: confirms JWT auth works (no envelope).
+investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
+  res.json(await docusignHealth());
 });
 
 // GET /api/signers — the server-authoritative signer allowlist for the dropdown.
