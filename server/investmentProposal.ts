@@ -107,17 +107,23 @@ export async function buildProposalDocx(
                 width: { size: 50, type: WidthType.PERCENTAGE },
                 margins: { top: 480, right: 240 },
                 children: [
-                  new Paragraph({ children: [new TextRun({ text: '______________________________', font: FONT, size: 20 })] }),
-                  // Invisible anchor (white, tiny) — DocuSign places sig1 here.
-                  new Paragraph({ children: [new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT })] }),
+                  // Invisible anchor sits at the START of the signature line, so
+                  // the DocuSign tab tracks to the line (raised onto it via the
+                  // negative anchorYOffset set in docusign.ts).
+                  new Paragraph({ children: [
+                    new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT }),
+                    new TextRun({ text: '______________________________', font: FONT, size: 20 }),
+                  ] }),
                 ],
               }),
               new TableCell({
                 width: { size: 50, type: WidthType.PERCENTAGE },
                 margins: { top: 480, left: 240 },
                 children: [
-                  new Paragraph({ children: [new TextRun({ text: '______________________________', font: FONT, size: 20 })] }),
-                  new Paragraph({ children: [new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT })] }),
+                  new Paragraph({ children: [
+                    new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT }),
+                    new TextRun({ text: '______________________________', font: FONT, size: 20 }),
+                  ] }),
                 ],
               }),
             ] }),

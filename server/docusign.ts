@@ -91,7 +91,9 @@ export async function sendForSignature(opts: {
             anchorString: `{{sig${i + 1}}}`,
             anchorUnits: 'pixels',
             anchorXOffset: '0',
-            anchorYOffset: '0',
+            // Anchor sits at the start of the signature underline; raise the tab
+            // so the signature rests on the line instead of dropping below it.
+            anchorYOffset: '-22',
             // Fail loudly (send errors) if the anchor is not found, rather than
             // silently producing a signature-less envelope. The readback below
             // also reports the placed-tab count per signer.
