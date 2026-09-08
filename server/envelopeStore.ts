@@ -55,6 +55,17 @@ export async function getEnvelope(envelopeId: string): Promise<EnvelopeRow | nul
   return { companyId: row.company_id, companyName: row.company_name, docType: row.doc_type, savedAt: row.saved_at ?? null };
 }
 
+// Envelopes for a company that haven't had their signed PDF saved yet.
+export async function getPendingEnvelopes(companyId: string): Promise<{ envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[]> {
+  await ensureTable();
+  const pool = await getPool();
+  const r = await pool.request()
+    .input('c', sql.NVarChar(50), companyId)
+    .query('SELECT envelope_id, company_name, doc_type FROM envelope_signings WHERE company_id = @c AND saved_at IS NULL');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyName: row.company_name, docType: row.doc_type }));
+}
+
 export async function markEnvelopeSaved(envelopeId: string): Promise<void> {
   const pool = await getPool();
   await pool.request()

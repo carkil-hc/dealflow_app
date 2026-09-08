@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
-import { FileSignature, Loader2, Download, Check, PenLine } from 'lucide-react';
+import { FileSignature, Loader2, Download, Check, PenLine, RefreshCw } from 'lucide-react';
 import { Company, Attachment } from '../../types';
 import { addHistory } from './helpers';
 import { downloadBase64 } from '../../ui';
@@ -29,11 +29,34 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
   const [sent, setSent] = useState<{ envelopeId: string; signers: string[]; missingTabs: string[] } | null>(null);
   const [confirmRegen, setConfirmRegen] = useState(false);
 
+  // Signed-copy sync (pull completed envelopes' PDFs into SharePoint)
+  const [syncing, setSyncing] = useState(false);
+  const [signedNote, setSignedNote] = useState('');
+
+  const syncSigned = async (announce: boolean) => {
+    setSyncing(true);
+    if (announce) setSignedNote('');
+    try {
+      const res = await fetch(`/api/companies/${form.id}/sync-signed`, { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      if (Array.isArray(d.saved) && d.saved.length > 0) {
+        setSignedNote(`Signed copy saved to SharePoint: ${d.saved.join(', ')}`);
+      } else if (announce) {
+        setSignedNote(d.pending > 0 ? 'No new signed copies yet — still awaiting signatures.' : 'No signed documents to retrieve.');
+      }
+    } catch { /* best-effort */ } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/signers')
       .then((r) => r.json())
       .then((d) => setSigners(d.signers ?? []))
       .catch(() => setSigners([]));
+    // On open, quietly pull any signed copies that completed since last time.
+    void syncSigned(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A proposal exists if we just generated one, or one is already in Files.
@@ -114,9 +137,22 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-400">
-        Generate HealthCap deal documents. Drafts are saved to the Files tab and should be reviewed before use.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-gray-400">
+          Generate HealthCap deal documents. Drafts are saved to the Files tab and should be reviewed before use.
+        </p>
+        <button
+          onClick={() => void syncSigned(true)}
+          disabled={syncing}
+          title="Check DocuSign for completed signatures and save the signed PDF to SharePoint"
+          className="flex items-center gap-1.5 shrink-0 text-xs text-gray-500 hover:text-hc-teal hover:bg-hc-teal-50 disabled:text-gray-300 px-2 py-1 rounded-sm transition-colors"
+        >
+          {syncing
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Checking…</>
+            : <><RefreshCw className="w-3 h-3" /> Check for signed copies</>}
+        </button>
+      </div>
+      {signedNote && <div className="text-xs text-green-700 flex items-center gap-1.5"><Check className="w-3.5 h-3.5 shrink-0" />{signedNote}</div>}
 
       {/* Investment Proposal */}
       <div className="border border-gray-200 bg-white rounded-sm">

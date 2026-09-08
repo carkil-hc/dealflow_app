@@ -64,6 +64,18 @@ export async function docusignHealth(): Promise<{ ok: boolean; accountId?: strin
   }
 }
 
+// Current status of an envelope (e.g. "sent", "delivered", "completed").
+export async function getEnvelopeStatus(envelopeId: string): Promise<string> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${cfg.baseUri}/restapi/v2.1/accounts/${cfg.accountId}/envelopes/${envelopeId}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`DocuSign envelope status → ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return String(data.status ?? '').toLowerCase();
+}
+
 // Download the completed envelope as a single combined PDF (all documents +
 // signatures). Returns base64. Used by the completion webhook.
 export async function downloadCombinedPdf(envelopeId: string): Promise<string> {

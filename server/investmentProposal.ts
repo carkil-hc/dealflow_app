@@ -10,8 +10,8 @@ import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf } from './docusign.js';
-import { recordEnvelope, getEnvelope, markEnvelopeSaved } from './envelopeStore.js';
+import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf, getEnvelopeStatus } from './docusign.js';
+import { recordEnvelope, getEnvelope, markEnvelopeSaved, getPendingEnvelopes } from './envelopeStore.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
@@ -272,6 +272,38 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
 // GET /api/docusign/health — diagnostic: confirms JWT auth works (no envelope).
 investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
   res.json(await docusignHealth());
+});
+
+// POST /api/companies/:id/sync-signed — on-demand pull (no Connect needed):
+// check the company's pending envelopes; for any now completed, download the
+// signed PDF and save it to the same SharePoint folder as the draft.
+investmentProposalRouter.post('/api/companies/:id/sync-signed', async (req, res) => {
+  try {
+    if (!docusignConfigured() || !sharePointConfigured()) return res.json({ saved: [], pending: 0 });
+    const pending = await getPendingEnvelopes(req.params.id);
+    const saved: string[] = [];
+    let stillPending = 0;
+    for (const env of pending) {
+      try {
+        const status = await getEnvelopeStatus(env.envelopeId);
+        if (status !== 'completed') { stillPending++; continue; }
+        const pdf = await downloadCombinedPdf(env.envelopeId);
+        const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
+        const label = env.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
+        const fileName = `${safe} — ${label} (Signed).pdf`;
+        await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
+        await markEnvelopeSaved(env.envelopeId);
+        saved.push(fileName);
+      } catch (e) {
+        console.error('[sync-signed] envelope', env.envelopeId, 'failed:', e instanceof Error ? e.message : e);
+        stillPending++;
+      }
+    }
+    res.json({ saved, pending: stillPending });
+  } catch (err) {
+    console.error('[sync-signed]', err);
+    res.status(500).json({ error: 'Failed to sync signed copies', detail: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 // Pull the envelope id + completed status out of a DocuSign Connect payload,
