@@ -95,13 +95,34 @@ export async function buildProposalDocx(
         }),
         new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: NO_BORDERS, rows }),
         new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
-        new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: '______________________________          ______________________________', font: FONT, size: 20 })] }),
-        // Invisible DocuSign anchors (white, tiny) so signature blocks auto-place.
-        new Paragraph({ children: [
-          new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT }),
-          new TextRun({ text: '                                                       ', size: 2, font: FONT }),
-          new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT }),
-        ] }),
+        // Two-column signature block: each anchor lives in its own cell so the
+        // DocuSign signature tabs are placed a full half-page apart (they used to
+        // overlap when both anchors sat on one line).
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: NO_BORDERS,
+          rows: [
+            new TableRow({ children: [
+              new TableCell({
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                margins: { top: 480, right: 240 },
+                children: [
+                  new Paragraph({ children: [new TextRun({ text: '______________________________', font: FONT, size: 20 })] }),
+                  // Invisible anchor (white, tiny) — DocuSign places sig1 here.
+                  new Paragraph({ children: [new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT })] }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 50, type: WidthType.PERCENTAGE },
+                margins: { top: 480, left: 240 },
+                children: [
+                  new Paragraph({ children: [new TextRun({ text: '______________________________', font: FONT, size: 20 })] }),
+                  new Paragraph({ children: [new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT })] }),
+                ],
+              }),
+            ] }),
+          ],
+        }),
         new Paragraph({ children: [new TextRun({ text: 'Draft generated for internal review — verify all figures before use.', italics: true, color: '888888', font: FONT, size: 16 })], spacing: { before: 240 } }),
       ],
     }],
