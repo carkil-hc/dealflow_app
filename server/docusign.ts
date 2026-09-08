@@ -64,6 +64,18 @@ export async function docusignHealth(): Promise<{ ok: boolean; accountId?: strin
   }
 }
 
+// Download the completed envelope as a single combined PDF (all documents +
+// signatures). Returns base64. Used by the completion webhook.
+export async function downloadCombinedPdf(envelopeId: string): Promise<string> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${cfg.baseUri}/restapi/v2.1/accounts/${cfg.accountId}/envelopes/${envelopeId}/documents/combined`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`DocuSign combined PDF → ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return Buffer.from(await res.arrayBuffer()).toString('base64');
+}
+
 // ── Send an envelope ─────────────────────────────────────────────────────────
 // The document should contain the invisible anchors {{sig1}} / {{sig2}} so
 // DocuSign places each signer's signature block automatically.
@@ -105,6 +117,17 @@ export async function sendForSignature(opts: {
       })),
     },
     status: 'sent',
+    // Ask DocuSign to notify us when the envelope is completed, so we can save
+    // the signed PDF back to SharePoint. Skipped if no webhook secret is set.
+    ...(process.env.DOCUSIGN_CONNECT_SECRET ? {
+      eventNotification: {
+        url: `${process.env.PUBLIC_BASE_URL ?? 'https://dealflow.healthcap.eu'}/api/docusign/connect?token=${encodeURIComponent(process.env.DOCUSIGN_CONNECT_SECRET)}`,
+        loggingEnabled: 'true',
+        requireAcknowledgment: 'true',
+        includeDocuments: 'false',
+        envelopeEvents: [{ envelopeEventStatusCode: 'completed' }],
+      },
+    } : {}),
   };
 
   const res = await fetch(`${cfg.baseUri}/restapi/v2.1/accounts/${cfg.accountId}/envelopes`, {

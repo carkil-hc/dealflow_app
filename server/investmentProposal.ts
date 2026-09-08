@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { createRequire } from 'node:module';
 import sql from 'mssql';
 import Anthropic from '@anthropic-ai/sdk';
@@ -10,7 +10,8 @@ import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth } from './docusign.js';
+import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf } from './docusign.js';
+import { recordEnvelope, getEnvelope, markEnvelopeSaved } from './envelopeStore.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
@@ -273,6 +274,49 @@ investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
   res.json(await docusignHealth());
 });
 
+// Pull the envelope id + completed status out of a DocuSign Connect payload,
+// tolerating both the JSON (aani) and legacy XML formats.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractEnvelope(body: any): { envelopeId?: string; completed: boolean } {
+  if (body && typeof body === 'object') {
+    const envelopeId = body.data?.envelopeId ?? body.envelopeId ?? body.data?.envelopeSummary?.envelopeId;
+    const status = String(body.event ?? body.data?.envelopeSummary?.status ?? body.status ?? '').toLowerCase();
+    return { envelopeId, completed: status.includes('completed') };
+  }
+  const s = String(body ?? '');
+  const m = s.match(/<EnvelopeID>([^<]+)<\/EnvelopeID>/i) ?? s.match(/"envelopeId"\s*:\s*"([^"]+)"/i);
+  const completed = /<Status>\s*Completed\s*<\/Status>/i.test(s) || /"status"\s*:\s*"completed"/i.test(s) || /envelope-completed/i.test(s);
+  return { envelopeId: m?.[1], completed };
+}
+
+// POST /api/docusign/connect — DocuSign completion webhook. When an envelope is
+// completed, download the signed combined PDF and save it to the same SharePoint
+// company folder as the draft. Protected by a shared-secret token.
+investmentProposalRouter.post('/api/docusign/connect', express.text({ type: '*/*', limit: '30mb' }), async (req, res) => {
+  const secret = process.env.DOCUSIGN_CONNECT_SECRET;
+  if (secret && req.query.token !== secret) { res.status(401).end(); return; }
+  try {
+    const { envelopeId, completed } = extractEnvelope(req.body);
+    if (!envelopeId || !completed) { res.status(200).end(); return; }
+    const map = await getEnvelope(envelopeId);
+    if (!map) { res.status(200).end(); return; }        // not one of ours
+    if (map.savedAt) { res.status(200).end(); return; }  // already saved
+    if (!sharePointConfigured()) { res.status(200).end(); return; }
+
+    const pdf = await downloadCombinedPdf(envelopeId);
+    const safe = map.companyName.replace(/[^a-z0-9 _-]/gi, '_');
+    const label = map.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
+    await saveToSharePoint(map.companyName, `${safe} — ${label} (Signed).pdf`, pdf, 'application/pdf');
+    await markEnvelopeSaved(envelopeId);
+    console.log(`[docusign-connect] saved signed PDF for envelope ${envelopeId} (${map.companyName})`);
+    res.status(200).end();
+  } catch (err) {
+    // Non-200 → DocuSign retries later (requireAcknowledgment is on).
+    console.error('[docusign-connect] failed:', err instanceof Error ? err.message : err);
+    res.status(500).end();
+  }
+});
+
 // GET /api/signers — the server-authoritative signer allowlist for the dropdown.
 investmentProposalRouter.get('/api/signers', (_req, res) => {
   res.json({ signers: SIGNERS });
@@ -362,6 +406,11 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal/send-for-s
       emailSubject: `Investment Proposal for signature – ${companyName}`,
       signers: signers as { name: string; email: string }[],
     });
+
+    // Map the envelope to this company so the completion webhook can save the
+    // signed PDF back to the same SharePoint folder.
+    try { await recordEnvelope(envelopeId, req.params.id, companyName, 'proposal'); }
+    catch (e) { console.error('[signing] recordEnvelope failed:', e instanceof Error ? e.message : e); }
 
     // Learn from any human edits: compare the AI draft to this finalized version.
     // Best-effort and synchronous (App Service kills post-response work); never

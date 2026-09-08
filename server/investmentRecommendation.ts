@@ -6,6 +6,7 @@ import { rowToCompany } from './companies.js';
 import { buildProposalDocx, ProposalData } from './investmentProposal.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
+import { recordEnvelope } from './envelopeStore.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText } from './proposalLearning.js';
 
 export const investmentRecommendationRouter = Router();
@@ -241,6 +242,10 @@ investmentRecommendationRouter.post('/api/companies/:id/investment-recommendatio
       emailSubject: `Investment Recommendation for signature – ${companyName}`,
       signers: signers as { name: string; email: string }[],
     });
+
+    // Map the envelope so the completion webhook saves the signed PDF to SharePoint.
+    try { await recordEnvelope(envelopeId, req.params.id, companyName, 'recommendation'); }
+    catch (e) { console.error('[signing] recordEnvelope (recommendation) failed:', e instanceof Error ? e.message : e); }
 
     // Learn from human edits: compare the AI draft to this finalized version.
     try {
