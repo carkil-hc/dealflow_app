@@ -66,6 +66,17 @@ export async function getPendingEnvelopes(companyId: string): Promise<{ envelope
   return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyName: row.company_name, docType: row.doc_type }));
 }
 
+// All unsaved envelopes across every company (for the global sweep).
+export async function getAllPendingEnvelopes(limit = 50): Promise<{ envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[]> {
+  await ensureTable();
+  const pool = await getPool();
+  const r = await pool.request()
+    .input('n', sql.Int, limit)
+    .query('SELECT TOP (@n) envelope_id, company_name, doc_type FROM envelope_signings WHERE saved_at IS NULL ORDER BY created_at ASC');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyName: row.company_name, docType: row.doc_type }));
+}
+
 export async function markEnvelopeSaved(envelopeId: string): Promise<void> {
   const pool = await getPool();
   await pool.request()

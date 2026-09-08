@@ -49,6 +49,12 @@ export default function App() {
       .catch(() => setAuthChecked(true));
   }, []);
 
+  // On load, sweep DocuSign for any completed envelopes and save their signed
+  // PDFs to SharePoint — so it happens automatically, no manual trigger needed.
+  useEffect(() => {
+    fetch('/api/signed-sweep', { method: 'POST' }).catch(() => { /* best-effort */ });
+  }, []);
+
   useEffect(() => {
     getCompanies().then(async (remote) => {
       setCompanies(remote);

@@ -11,7 +11,7 @@ import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf, getEnvelopeStatus } from './docusign.js';
-import { recordEnvelope, getEnvelope, markEnvelopeSaved, getPendingEnvelopes } from './envelopeStore.js';
+import { recordEnvelope, getEnvelope, markEnvelopeSaved, getPendingEnvelopes, getAllPendingEnvelopes } from './envelopeStore.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
@@ -274,35 +274,53 @@ investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
   res.json(await docusignHealth());
 });
 
-// POST /api/companies/:id/sync-signed — on-demand pull (no Connect needed):
-// check the company's pending envelopes; for any now completed, download the
-// signed PDF and save it to the same SharePoint folder as the draft.
+// Shared: for each envelope, if completed, download the signed PDF and save it
+// to the company's SharePoint folder. Returns saved filenames + still-pending count.
+async function saveCompletedEnvelopes(
+  envs: { envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[],
+): Promise<{ saved: string[]; pending: number }> {
+  const saved: string[] = [];
+  let pending = 0;
+  for (const env of envs) {
+    try {
+      const status = await getEnvelopeStatus(env.envelopeId);
+      if (status !== 'completed') { pending++; continue; }
+      const pdf = await downloadCombinedPdf(env.envelopeId);
+      const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
+      const label = env.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
+      const fileName = `${safe} — ${label} (Signed).pdf`;
+      await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
+      await markEnvelopeSaved(env.envelopeId);
+      saved.push(fileName);
+    } catch (e) {
+      console.error('[signed-sync] envelope', env.envelopeId, 'failed:', e instanceof Error ? e.message : e);
+      pending++;
+    }
+  }
+  return { saved, pending };
+}
+
+// POST /api/companies/:id/sync-signed — pull this company's completed envelopes.
 investmentProposalRouter.post('/api/companies/:id/sync-signed', async (req, res) => {
   try {
     if (!docusignConfigured() || !sharePointConfigured()) return res.json({ saved: [], pending: 0 });
-    const pending = await getPendingEnvelopes(req.params.id);
-    const saved: string[] = [];
-    let stillPending = 0;
-    for (const env of pending) {
-      try {
-        const status = await getEnvelopeStatus(env.envelopeId);
-        if (status !== 'completed') { stillPending++; continue; }
-        const pdf = await downloadCombinedPdf(env.envelopeId);
-        const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
-        const label = env.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
-        const fileName = `${safe} — ${label} (Signed).pdf`;
-        await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
-        await markEnvelopeSaved(env.envelopeId);
-        saved.push(fileName);
-      } catch (e) {
-        console.error('[sync-signed] envelope', env.envelopeId, 'failed:', e instanceof Error ? e.message : e);
-        stillPending++;
-      }
-    }
-    res.json({ saved, pending: stillPending });
+    res.json(await saveCompletedEnvelopes(await getPendingEnvelopes(req.params.id)));
   } catch (err) {
     console.error('[sync-signed]', err);
     res.status(500).json({ error: 'Failed to sync signed copies', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// POST /api/signed-sweep — pull completed envelopes across ALL companies. Runs
+// on app load (and can be called by a scheduler) so signed copies land in
+// SharePoint without anyone opening the specific company.
+investmentProposalRouter.post('/api/signed-sweep', async (_req, res) => {
+  try {
+    if (!docusignConfigured() || !sharePointConfigured()) return res.json({ saved: [], pending: 0 });
+    res.json(await saveCompletedEnvelopes(await getAllPendingEnvelopes(50)));
+  } catch (err) {
+    console.error('[signed-sweep]', err);
+    res.status(500).json({ error: 'Failed to sweep signed copies', detail: err instanceof Error ? err.message : String(err) });
   }
 });
 
