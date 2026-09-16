@@ -88,39 +88,49 @@ export async function downloadCombinedPdf(envelopeId: string): Promise<string> {
   return Buffer.from(await res.arrayBuffer()).toString('base64');
 }
 
+// Completion-webhook config attached to each envelope (empty if no secret set).
+function buildEventNotification(): Record<string, unknown> {
+  const secret = process.env.DOCUSIGN_CONNECT_SECRET;
+  if (!secret) return {};
+  return {
+    eventNotification: {
+      url: `${process.env.PUBLIC_BASE_URL ?? 'https://dealflow.healthcap.eu'}/api/docusign/connect?token=${encodeURIComponent(secret)}`,
+      loggingEnabled: 'true',
+      requireAcknowledgment: 'true',
+      includeDocuments: 'false',
+      envelopeEvents: [{ envelopeEventStatusCode: 'completed' }],
+    },
+  };
+}
+
 // ── Send an envelope ─────────────────────────────────────────────────────────
-// The document should contain the invisible anchors {{sig1}} / {{sig2}} so
-// DocuSign places each signer's signature block automatically.
-export async function sendForSignature(opts: {
-  documentBase64: string;
-  documentName: string;   // e.g. "Company — Investment Proposal.docx"
+// One or more documents; each signer's signature tab is placed at their anchor
+// string. An anchor matches across ALL documents, so a signer with anchor
+// "{{sigX}}" that appears in every document signs each of them.
+export async function sendEnvelope(opts: {
+  documents: { base64: string; name: string }[];
   emailSubject: string;
-  signers: Signer[];
+  signers: { name: string; email: string; anchor: string }[];
 }): Promise<{ envelopeId: string; tabDiagnostics: { name: string; signHereTabs: number }[] }> {
   const token = await getAccessToken();
   const envelope = {
     emailSubject: opts.emailSubject,
-    documents: [{ documentBase64: opts.documentBase64, name: opts.documentName, fileExtension: 'docx', documentId: '1' }],
+    documents: opts.documents.map((d, i) => ({ documentBase64: d.base64, name: d.name, fileExtension: 'docx', documentId: String(i + 1) })),
     recipients: {
       signers: opts.signers.map((s, i) => ({
         email: s.email,
         name: s.name,
         recipientId: String(i + 1),
-        // Same routing order for all signers → they can sign in parallel and
-        // every signer gets an immediate "action required" (sequential order
-        // would make later signers wait, showing no action yet).
+        // Same routing order for all signers → parallel signing; everyone gets
+        // an immediate "action required".
         routingOrder: '1',
         tabs: {
           signHereTabs: [{
-            anchorString: `{{sig${i + 1}}}`,
+            anchorString: s.anchor,
             anchorUnits: 'pixels',
             anchorXOffset: '0',
-            // Anchor sits at the start of the signature underline; raise the tab
-            // so the signature rests on the line instead of dropping below it.
+            // Raise the tab so the signature rests on the underline.
             anchorYOffset: '-22',
-            // Fail loudly (send errors) if the anchor is not found, rather than
-            // silently producing a signature-less envelope. The readback below
-            // also reports the placed-tab count per signer.
             anchorIgnoreIfNotPresent: 'false',
             anchorCaseSensitive: 'false',
             anchorMatchWholeWord: 'false',
@@ -129,17 +139,7 @@ export async function sendForSignature(opts: {
       })),
     },
     status: 'sent',
-    // Ask DocuSign to notify us when the envelope is completed, so we can save
-    // the signed PDF back to SharePoint. Skipped if no webhook secret is set.
-    ...(process.env.DOCUSIGN_CONNECT_SECRET ? {
-      eventNotification: {
-        url: `${process.env.PUBLIC_BASE_URL ?? 'https://dealflow.healthcap.eu'}/api/docusign/connect?token=${encodeURIComponent(process.env.DOCUSIGN_CONNECT_SECRET)}`,
-        loggingEnabled: 'true',
-        requireAcknowledgment: 'true',
-        includeDocuments: 'false',
-        envelopeEvents: [{ envelopeEventStatusCode: 'completed' }],
-      },
-    } : {}),
+    ...buildEventNotification(),
   };
 
   const res = await fetch(`${cfg.baseUri}/restapi/v2.1/accounts/${cfg.accountId}/envelopes`, {
@@ -151,8 +151,7 @@ export async function sendForSignature(opts: {
   const data = await res.json();
   const envelopeId = data.envelopeId as string;
 
-  // Self-diagnose: read back the recipients' tabs so we can confirm each signer
-  // actually got a signature field (i.e. the anchors were found).
+  // Self-diagnose: read back the recipients' tabs to confirm each anchor was found.
   const tabDiagnostics: { name: string; signHereTabs: number }[] = [];
   try {
     const chk = await fetch(
@@ -162,18 +161,28 @@ export async function sendForSignature(opts: {
     if (chk.ok) {
       const rc = await chk.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const s of (rc.signers ?? []) as any[]) {
-        const n = s?.tabs?.signHereTabs?.length ?? 0;
-        tabDiagnostics.push({ name: s.name, signHereTabs: n });
-      }
+      for (const s of (rc.signers ?? []) as any[]) tabDiagnostics.push({ name: s.name, signHereTabs: s?.tabs?.signHereTabs?.length ?? 0 });
       const missing = tabDiagnostics.filter(t => t.signHereTabs === 0).map(t => t.name);
-      if (missing.length) {
-        console.warn(`[docusign] envelope ${envelopeId}: NO signature field placed for ${missing.join(', ')} — anchor "{{sigN}}" not found in the document.`);
-      }
+      if (missing.length) console.warn(`[docusign] envelope ${envelopeId}: NO signature field for ${missing.join(', ')} — anchor not found.`);
     }
   } catch (e) {
     console.warn('[docusign] tab verification failed:', e instanceof Error ? e.message : e);
   }
 
   return { envelopeId, tabDiagnostics };
+}
+
+// Single-document convenience (proposals / recommendations): anchors are
+// {{sig1}}, {{sig2}}, … by signer order.
+export async function sendForSignature(opts: {
+  documentBase64: string;
+  documentName: string;
+  emailSubject: string;
+  signers: Signer[];
+}): Promise<{ envelopeId: string; tabDiagnostics: { name: string; signHereTabs: number }[] }> {
+  return sendEnvelope({
+    documents: [{ base64: opts.documentBase64, name: opts.documentName }],
+    emailSubject: opts.emailSubject,
+    signers: opts.signers.map((s, i) => ({ name: s.name, email: s.email, anchor: `{{sig${i + 1}}}` })),
+  });
 }

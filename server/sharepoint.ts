@@ -123,6 +123,43 @@ export async function getProposalFromSharePoint(
   return { name: item.name, base64: buf.toString('base64') };
 }
 
+// Resolve a company's subfolder (driveId + folderId), or null if it doesn't exist.
+async function resolveCompanyFolder(companyName: string): Promise<{ driveId: string; folderId: string } | null> {
+  const { driveId, itemId } = await resolveParentFolder();
+  const kids = await graph(`/drives/${driveId}/items/${itemId}/children?$select=id,name,folder&$top=999`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const folder = (kids?.value ?? []).find((c: any) => c.folder && c.name === safeName(companyName));
+  return folder ? { driveId, folderId: folder.id } : null;
+}
+
+// List the files in a company's SharePoint subfolder (names + web URLs, no content).
+export async function listCompanyFiles(companyName: string): Promise<{ name: string; webUrl: string }[]> {
+  if (!sharePointConfigured()) return [];
+  const f = await resolveCompanyFolder(companyName);
+  if (!f) return [];
+  const files = await graph(`/drives/${f.driveId}/items/${f.folderId}/children?$select=id,name,file,webUrl&$top=999`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (files?.value ?? []).filter((x: any) => x.file).map((x: any) => ({ name: x.name, webUrl: x.webUrl as string }));
+}
+
+// Download every file in a company's subfolder whose name matches `pattern`.
+export async function getDocsByPattern(companyName: string, pattern: RegExp): Promise<{ name: string; base64: string }[]> {
+  if (!sharePointConfigured()) return [];
+  const f = await resolveCompanyFolder(companyName);
+  if (!f) return [];
+  const files = await graph(`/drives/${f.driveId}/items/${f.folderId}/children?$select=id,name,file&$top=999`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const matches = (files?.value ?? []).filter((x: any) => x.file && pattern.test(x.name));
+  const out: { name: string; base64: string }[] = [];
+  for (const m of matches) {
+    const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${f.driveId}/items/${m.id}/content`, {
+      headers: { Authorization: `Bearer ${await graphToken()}` },
+    });
+    if (res.ok) out.push({ name: m.name, base64: Buffer.from(await res.arrayBuffer()).toString('base64') });
+  }
+  return out;
+}
+
 // Save a generated document to `<configured folder>/<company>/<fileName>` in
 // SharePoint. Returns the web URL. Throws on any Graph/permission error.
 export async function saveToSharePoint(companyName: string, fileName: string, base64: string, contentType: string): Promise<string> {

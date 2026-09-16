@@ -4,6 +4,7 @@ import { Company, Attachment } from '../../types';
 import { addHistory } from './helpers';
 import { downloadBase64 } from '../../ui';
 import RecommendationCard from './RecommendationCard';
+import BoardApprovalsCard from './BoardApprovalsCard';
 
 interface Props {
   form: Company;
@@ -288,6 +289,9 @@ export default function InvestmentDocsTab({ form, setForm, onAutoSave, currentUs
 
       {/* Investment Recommendation */}
       <RecommendationCard form={form} setForm={setForm} onAutoSave={onAutoSave} currentUser={currentUser} signers={signers} />
+
+      {/* Board Approvals — generated once the recommendation is signed */}
+      <BoardApprovalsCard form={form} setForm={setForm} onAutoSave={onAutoSave} currentUser={currentUser} />
     </div>
   );
 }

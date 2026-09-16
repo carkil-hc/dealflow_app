@@ -6,7 +6,7 @@ import { getPool } from './db.js';
 export interface EnvelopeRow {
   companyId: string;
   companyName: string;
-  docType: 'proposal' | 'recommendation';
+  docType: 'proposal' | 'recommendation' | 'board-approval';
   savedAt: string | null;
 }
 
@@ -28,7 +28,7 @@ async function ensureTable(): Promise<void> {
   tableReady = true;
 }
 
-export async function recordEnvelope(envelopeId: string, companyId: string, companyName: string, docType: 'proposal' | 'recommendation'): Promise<void> {
+export async function recordEnvelope(envelopeId: string, companyId: string, companyName: string, docType: 'proposal' | 'recommendation' | 'board-approval'): Promise<void> {
   await ensureTable();
   const pool = await getPool();
   await pool.request()
@@ -55,26 +55,28 @@ export async function getEnvelope(envelopeId: string): Promise<EnvelopeRow | nul
   return { companyId: row.company_id, companyName: row.company_name, docType: row.doc_type, savedAt: row.saved_at ?? null };
 }
 
+export type PendingEnvelope = { envelopeId: string; companyId: string; companyName: string; docType: 'proposal' | 'recommendation' | 'board-approval' };
+
 // Envelopes for a company that haven't had their signed PDF saved yet.
-export async function getPendingEnvelopes(companyId: string): Promise<{ envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[]> {
+export async function getPendingEnvelopes(companyId: string): Promise<PendingEnvelope[]> {
   await ensureTable();
   const pool = await getPool();
   const r = await pool.request()
     .input('c', sql.NVarChar(50), companyId)
-    .query('SELECT envelope_id, company_name, doc_type FROM envelope_signings WHERE company_id = @c AND saved_at IS NULL');
+    .query('SELECT envelope_id, company_id, company_name, doc_type FROM envelope_signings WHERE company_id = @c AND saved_at IS NULL');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyName: row.company_name, docType: row.doc_type }));
+  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyId: row.company_id, companyName: row.company_name, docType: row.doc_type }));
 }
 
 // All unsaved envelopes across every company (for the global sweep).
-export async function getAllPendingEnvelopes(limit = 50): Promise<{ envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[]> {
+export async function getAllPendingEnvelopes(limit = 50): Promise<PendingEnvelope[]> {
   await ensureTable();
   const pool = await getPool();
   const r = await pool.request()
     .input('n', sql.Int, limit)
-    .query('SELECT TOP (@n) envelope_id, company_name, doc_type FROM envelope_signings WHERE saved_at IS NULL ORDER BY created_at ASC');
+    .query('SELECT TOP (@n) envelope_id, company_id, company_name, doc_type FROM envelope_signings WHERE saved_at IS NULL ORDER BY created_at ASC');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyName: row.company_name, docType: row.doc_type }));
+  return r.recordset.map((row: any) => ({ envelopeId: row.envelope_id, companyId: row.company_id, companyName: row.company_name, docType: row.doc_type }));
 }
 
 export async function markEnvelopeSaved(envelopeId: string): Promise<void> {

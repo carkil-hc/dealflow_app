@@ -12,6 +12,7 @@ import { rowToCompany } from './companies.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf, getEnvelopeStatus } from './docusign.js';
 import { recordEnvelope, getEnvelope, markEnvelopeSaved, getPendingEnvelopes, getAllPendingEnvelopes } from './envelopeStore.js';
+import { generateBoardApprovals } from './boardApproval.js';
 import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
@@ -274,10 +275,17 @@ investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
   res.json(await docusignHealth());
 });
 
+const SIGNED_LABEL: Record<'proposal' | 'recommendation' | 'board-approval', string> = {
+  proposal: 'Investment Proposal',
+  recommendation: 'Investment Recommendation',
+  'board-approval': 'Board Approvals',
+};
+
 // Shared: for each envelope, if completed, download the signed PDF and save it
-// to the company's SharePoint folder. Returns saved filenames + still-pending count.
+// to the company's SharePoint folder. When a recommendation completes, also
+// auto-generate the two board-approval protocols. Returns saved + pending count.
 async function saveCompletedEnvelopes(
-  envs: { envelopeId: string; companyName: string; docType: 'proposal' | 'recommendation' }[],
+  envs: { envelopeId: string; companyId: string; companyName: string; docType: 'proposal' | 'recommendation' | 'board-approval' }[],
 ): Promise<{ saved: string[]; pending: number }> {
   const saved: string[] = [];
   let pending = 0;
@@ -287,11 +295,15 @@ async function saveCompletedEnvelopes(
       if (status !== 'completed') { pending++; continue; }
       const pdf = await downloadCombinedPdf(env.envelopeId);
       const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
-      const label = env.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
-      const fileName = `${safe} — ${label} (Signed).pdf`;
+      const fileName = `${safe} — ${SIGNED_LABEL[env.docType]} (Signed).pdf`;
       await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
       await markEnvelopeSaved(env.envelopeId);
       saved.push(fileName);
+      // Recommendation signed → generate the two board-approval protocols.
+      if (env.docType === 'recommendation') {
+        try { await generateBoardApprovals(env.companyId, env.companyName); }
+        catch (e) { console.error('[board-approvals] auto-generate failed:', e instanceof Error ? e.message : e); }
+      }
     } catch (e) {
       console.error('[signed-sync] envelope', env.envelopeId, 'failed:', e instanceof Error ? e.message : e);
       pending++;
@@ -355,10 +367,14 @@ investmentProposalRouter.post('/api/docusign/connect', express.text({ type: '*/*
 
     const pdf = await downloadCombinedPdf(envelopeId);
     const safe = map.companyName.replace(/[^a-z0-9 _-]/gi, '_');
-    const label = map.docType === 'recommendation' ? 'Investment Recommendation' : 'Investment Proposal';
-    await saveToSharePoint(map.companyName, `${safe} — ${label} (Signed).pdf`, pdf, 'application/pdf');
+    await saveToSharePoint(map.companyName, `${safe} — ${SIGNED_LABEL[map.docType]} (Signed).pdf`, pdf, 'application/pdf');
     await markEnvelopeSaved(envelopeId);
     console.log(`[docusign-connect] saved signed PDF for envelope ${envelopeId} (${map.companyName})`);
+    // Recommendation signed → generate the two board-approval protocols.
+    if (map.docType === 'recommendation') {
+      try { await generateBoardApprovals(map.companyId, map.companyName); }
+      catch (e) { console.error('[board-approvals] auto-generate (webhook) failed:', e instanceof Error ? e.message : e); }
+    }
     res.status(200).end();
   } catch (err) {
     // Non-200 → DocuSign retries later (requireAcknowledgment is on).
