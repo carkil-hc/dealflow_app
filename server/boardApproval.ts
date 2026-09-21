@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import sql from 'mssql';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
-import { rowToCompany } from './companies.js';
+import { getCompanyById } from './companies.js';
+import { sanitizeFileBase } from './util.js';
 import { saveToSharePoint, sharePointConfigured, listCompanyFiles, getDocsByPattern } from './sharepoint.js';
 import { sendEnvelope } from './docusign.js';
 import { recordEnvelope } from './envelopeStore.js';
@@ -102,21 +102,13 @@ function buildBoardApprovalDocx(entity: typeof ENTITIES[number], d: BoardData): 
   return Packer.toBase64String(doc);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadCompany(id: string): Promise<any> {
-  const pool = await getPool();
-  const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
-  if (result.recordset.length === 0) throw new Error('Company not found');
-  return rowToCompany(result.recordset[0]);
-}
-
 const BOARD_FILE = (companyName: string, entityName: string) =>
-  `${companyName.replace(/[^a-z0-9 _-]/gi, '_')} — Board Approval ${entityName}.docx`;
+  `${sanitizeFileBase(companyName)} — Board Approval ${entityName}.docx`;
 
 // Generate the two board-approval protocols and save them to the company's
 // SharePoint folder. Idempotent: skips if both already exist.
 export async function generateBoardApprovals(companyId: string, companyName?: string): Promise<{ generated: string[]; skipped: boolean }> {
-  const c = companyName ? { name: companyName, location: undefined } : await loadCompany(companyId);
+  const c = companyName ? { name: companyName, location: undefined } : await getCompanyById(companyId);
   const name: string = c.name;
   if (!sharePointConfigured()) return { generated: [], skipped: true };
 
@@ -129,7 +121,7 @@ export async function generateBoardApprovals(companyId: string, companyName?: st
   let svAdj = '', enAdj = '';
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const loc = (c as any).location ?? (await loadCompany(companyId)).location;
+    const loc = (c as any).location ?? (await getCompanyById(companyId)).location;
     const r = await askClaudeJson<{ svAdjective: string; enAdjective: string }>({
       content: `The company "${name}" is located in: ${loc ?? 'unknown'}. Return ONLY JSON {"svAdjective": Swedish nationality adjective in lowercase (e.g. amerikanska, svenska, danska, schweiziska, brittiska, tyska), "enAdjective": English nationality adjective (e.g. American, Swedish, Danish, Swiss)}. If the country is unknown, return empty strings.`,
       model: 'claude-sonnet-4-5', maxTokens: 200,

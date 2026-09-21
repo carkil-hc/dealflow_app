@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import sql from 'mssql';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
-import { rowToCompany } from './companies.js';
+import { getCompanyById } from './companies.js';
+import { sanitizeFileBase } from './util.js';
 import { buildProposalDocx, ProposalData } from './proposalDocx.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
@@ -33,14 +33,6 @@ function readVerified(body: unknown): VerifiedTerms {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadCompany(id: string): Promise<any> {
-  const pool = await getPool();
-  const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
-  if (result.recordset.length === 0) throw new Error('Company not found');
-  return rowToCompany(result.recordset[0]);
-}
-
 // The Investment Proposal is the recommendation's primary source. Prefer the
 // SharePoint copy; fall back to a proposal .docx in the company's attachments.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,7 +52,7 @@ async function latestProposalText(companyName: string, company: any): Promise<st
 // ── Prefill: suggest the four verify-fields from the proposal + record ────────
 investmentRecommendationRouter.post('/api/companies/:id/recommendation/prefill', async (req, res) => {
   try {
-    const c = await loadCompany(req.params.id);
+    const c = await getCompanyById(req.params.id);
     const proposalText = await latestProposalText(c.name, c);
     const fields = {
       name: c.name, sector: c.sector, therapeuticArea: c.therapeuticArea,
@@ -106,7 +98,7 @@ interface RecData {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildRecommendationAttachment(id: string, version: number, verified: VerifiedTerms): Promise<any> {
-  const c = await loadCompany(id);
+  const c = await getCompanyById(id);
   const proposalText = await latestProposalText(c.name, c);
   const guide = await getDraftingGuide('recommendation');
   const guideBlock = guide
@@ -169,7 +161,7 @@ ${proposalText ? proposalText.slice(0, 40000) : '(no proposal found — draft fr
 
   const base64 = await buildProposalDocx(c.name, data, { title: REC_TITLE, syndicateLabel: 'Syndicate' });
   const bytes = Buffer.from(base64, 'base64');
-  const safe = c.name.replace(/[^a-z0-9 _-]/gi, '_');
+  const safe = sanitizeFileBase(c.name);
   const suffix = version > 1 ? ` (v${version})` : '';
   const attachment = {
     id: `${Date.now()}-ir`,

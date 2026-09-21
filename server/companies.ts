@@ -39,6 +39,15 @@ export function rowToCompany(row: Record<string, any>) {
   };
 }
 
+// Load a full company record by id (throws 'Company not found' if missing).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCompanyById(id: string): Promise<any> {
+  const pool = await getPool();
+  const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
+  if (result.recordset.length === 0) throw new Error('Company not found');
+  return rowToCompany(result.recordset[0]);
+}
+
 // Insert or update one company (MERGE on id).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function upsertOne(pool: sql.ConnectionPool, c: any) {

@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { sanitizeFileBase } from './util.js';
 import { saveToSharePoint, sharePointConfigured } from './sharepoint.js';
 import { SIGNERS, docusignConfigured, docusignHealth, downloadCombinedPdf, getEnvelopeStatus } from './docusign.js';
 import { getEnvelope, markEnvelopeSaved, getPendingEnvelopes, getAllPendingEnvelopes, PendingEnvelope } from './envelopeStore.js';
@@ -22,7 +23,7 @@ async function saveCompletedEnvelopes(envs: PendingEnvelope[]): Promise<{ saved:
     try {
       if (await getEnvelopeStatus(env.envelopeId) !== 'completed') { pending++; continue; }
       const pdf = await downloadCombinedPdf(env.envelopeId);
-      const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
+      const safe = sanitizeFileBase(env.companyName);
       const fileName = `${safe} — ${SIGNED_LABEL[env.docType]} (Signed).pdf`;
       await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
       await markEnvelopeSaved(env.envelopeId);
@@ -103,7 +104,7 @@ signingRouter.post('/api/docusign/connect', express.text({ type: '*/*', limit: '
     if (!sharePointConfigured()) { res.status(200).end(); return; }
 
     const pdf = await downloadCombinedPdf(envelopeId);
-    const safe = map.companyName.replace(/[^a-z0-9 _-]/gi, '_');
+    const safe = sanitizeFileBase(map.companyName);
     await saveToSharePoint(map.companyName, `${safe} — ${SIGNED_LABEL[map.docType]} (Signed).pdf`, pdf, 'application/pdf');
     await markEnvelopeSaved(envelopeId);
     console.log(`[docusign-connect] saved signed PDF for envelope ${envelopeId} (${map.companyName})`);

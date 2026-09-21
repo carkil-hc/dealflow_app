@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { createRequire } from 'node:module';
-import sql from 'mssql';
 import Anthropic from '@anthropic-ai/sdk';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
-import { rowToCompany } from './companies.js';
+import { getCompanyById } from './companies.js';
+import { sanitizeFileBase } from './util.js';
 import { buildProposalDocx, ProposalData } from './proposalDocx.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
@@ -29,10 +29,7 @@ export const investmentProposalRouter = Router();
 // enough to fit the HTTP timeout by using Sonnet.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildProposalAttachment(id: string, version = 1): Promise<any> {
-    const pool = await getPool();
-    const result = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT * FROM companies WHERE id = @id');
-    if (result.recordset.length === 0) throw new Error('Company not found');
-    const c = rowToCompany(result.recordset[0]);
+    const c = await getCompanyById(id);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const atts: any[] = (c.attachments ?? []).filter((a: any) => a && a.data);
@@ -103,7 +100,7 @@ ${JSON.stringify(fields, null, 2)}`,
 
     const base64 = await buildProposalDocx(c.name, data);
     const bytes = Buffer.from(base64, 'base64');
-    const safe = c.name.replace(/[^a-z0-9 _-]/gi, '_');
+    const safe = sanitizeFileBase(c.name);
     const suffix = version > 1 ? ` (v${version})` : '';
     const attachment = {
       id: `${Date.now()}-ip`,
