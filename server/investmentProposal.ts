@@ -1,19 +1,15 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { createRequire } from 'node:module';
 import sql from 'mssql';
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, BorderStyle, AlignmentType,
-} from 'docx';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
+import { buildProposalDocx, ProposalData } from './proposalDocx.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
-import { SIGNERS, sendForSignature, docusignConfigured, docusignHealth, downloadCombinedPdf, getEnvelopeStatus } from './docusign.js';
-import { recordEnvelope, getEnvelope, markEnvelopeSaved, getPendingEnvelopes, getAllPendingEnvelopes } from './envelopeStore.js';
-import { generateBoardApprovals } from './boardApproval.js';
-import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText, extractText, seedGuideFromExamples, resetGuide, DocType } from './proposalLearning.js';
+import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
+import { recordEnvelope } from './envelopeStore.js';
+import { getDraftingGuide, saveDraft, getDraft, learnFromEdit, extractDocxText } from './proposalLearning.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
@@ -26,121 +22,6 @@ const OFFICE_FILETYPE: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
 };
 
-// ── Proposal structure (mirrors HealthCap's standard proposal) ───────────────
-export interface ProposalData {
-  date: string;
-  location: string;
-  companyInception?: string; // recommendations include an inception-year row
-  syndicatingInvestors: string;
-  amountAndTerms: string;
-  preMoneyValuation: string;
-  postMoneyValuation: string;
-  investmentHorizon: string;
-  sections: { heading: string; content: string }[];
-}
-
-// ── Word rendering ───────────────────────────────────────────────────────────
-const FONT = 'Calibri';
-const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } as const;
-const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER };
-
-function labelCell(text: string): TableCell {
-  return new TableCell({
-    width: { size: 26, type: WidthType.PERCENTAGE },
-    margins: { top: 60, bottom: 60, right: 160 },
-    children: [new Paragraph({ children: [new TextRun({ text, bold: true, font: FONT, size: 20 })] })],
-  });
-}
-
-function contentCell(text: string): TableCell {
-  const paras = String(text || '').split('\n').filter(l => l.trim().length > 0);
-  return new TableCell({
-    width: { size: 74, type: WidthType.PERCENTAGE },
-    margins: { top: 60, bottom: 60 },
-    children: (paras.length ? paras : ['']).map(p =>
-      new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: p, font: FONT, size: 20 })] })),
-  });
-}
-
-function row(label: string, content: string): TableRow {
-  return new TableRow({ children: [labelCell(label), contentCell(content)] });
-}
-
-export async function buildProposalDocx(
-  companyName: string,
-  d: ProposalData,
-  opts: { title?: string; syndicateLabel?: string } = {},
-): Promise<string> {
-  const title = opts.title ?? 'Investment Proposal – HealthCap IX D AB and HealthCap IX E AB';
-  const syndicateLabel = opts.syndicateLabel ?? 'Syndicating investors';
-  const rows: TableRow[] = [
-    row('Date', d.date),
-    row('Company', companyName),
-    row('Location', d.location),
-    ...(d.companyInception ? [row('Company inception', d.companyInception)] : []),
-    row(syndicateLabel, d.syndicatingInvestors),
-    row('Amount and Terms', d.amountAndTerms),
-    row('Pre-money Valuation', d.preMoneyValuation),
-    row('Post-money Valuation', d.postMoneyValuation),
-    row('Investment Horizon', d.investmentHorizon),
-    ...d.sections.map(s => row(s.heading, s.content)),
-  ];
-
-  const doc = new Document({
-    styles: { default: { document: { run: { font: FONT, size: 20 } } } },
-    sections: [{
-      // Narrow margins (~0.6") to help the whole document fit within 3 pages.
-      properties: { page: { margin: { top: 864, bottom: 864, left: 864, right: 864 } } },
-      children: [
-        new Paragraph({
-          spacing: { after: 160 },
-          children: [new TextRun({ text: title, bold: true, font: FONT, size: 24 })],
-        }),
-        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: NO_BORDERS, rows }),
-        new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
-        // Two-column signature block: each anchor lives in its own cell so the
-        // DocuSign signature tabs are placed a full half-page apart (they used to
-        // overlap when both anchors sat on one line).
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          borders: NO_BORDERS,
-          rows: [
-            new TableRow({ children: [
-              new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                margins: { top: 360, right: 240 },
-                children: [
-                  // Invisible anchor sits at the START of the signature line, so
-                  // the DocuSign tab tracks to the line (raised onto it via the
-                  // negative anchorYOffset set in docusign.ts).
-                  new Paragraph({ children: [
-                    new TextRun({ text: '{{sig1}}', color: 'FFFFFF', size: 2, font: FONT }),
-                    new TextRun({ text: '______________________________', font: FONT, size: 20 }),
-                  ] }),
-                ],
-              }),
-              new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                margins: { top: 360, left: 240 },
-                children: [
-                  new Paragraph({ children: [
-                    new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT }),
-                    new TextRun({ text: '______________________________', font: FONT, size: 20 }),
-                  ] }),
-                ],
-              }),
-            ] }),
-          ],
-        }),
-        new Paragraph({ children: [new TextRun({ text: 'Draft generated for internal review — verify all figures before use.', italics: true, color: '888888', font: FONT, size: 16 })], spacing: { before: 240 } }),
-      ],
-    }],
-  });
-
-  return Packer.toBase64String(doc);
-}
-
-// ── Route ────────────────────────────────────────────────────────────────────
 export const investmentProposalRouter = Router();
 
 // Draft the proposal and return it as an attachment (the client saves it to
@@ -158,8 +39,7 @@ async function buildProposalAttachment(id: string, version = 1): Promise<any> {
     const content: Anthropic.MessageParam['content'] = [];
     const CAP = 20 * 1024 * 1024;
     let used = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const a of atts as any[]) {
+    for (const a of atts) {
       if (used + a.data.length > CAP) continue;
       if (a.type === 'application/pdf') {
         used += a.data.length;
@@ -270,169 +150,6 @@ investmentProposalRouter.post('/api/companies/:id/investment-proposal', async (r
     res.status(500).json({ error: 'Failed to generate investment proposal', detail: err instanceof Error ? err.message : String(err) });
   }
 });
-
-// GET /api/docusign/health — diagnostic: confirms JWT auth works (no envelope).
-investmentProposalRouter.get('/api/docusign/health', async (_req, res) => {
-  res.json(await docusignHealth());
-});
-
-const SIGNED_LABEL: Record<'proposal' | 'recommendation' | 'board-approval', string> = {
-  proposal: 'Investment Proposal',
-  recommendation: 'Investment Recommendation',
-  'board-approval': 'Board Approvals',
-};
-
-// Shared: for each envelope, if completed, download the signed PDF and save it
-// to the company's SharePoint folder. When a recommendation completes, also
-// auto-generate the two board-approval protocols. Returns saved + pending count.
-async function saveCompletedEnvelopes(
-  envs: { envelopeId: string; companyId: string; companyName: string; docType: 'proposal' | 'recommendation' | 'board-approval' }[],
-): Promise<{ saved: string[]; pending: number }> {
-  const saved: string[] = [];
-  let pending = 0;
-  for (const env of envs) {
-    try {
-      const status = await getEnvelopeStatus(env.envelopeId);
-      if (status !== 'completed') { pending++; continue; }
-      const pdf = await downloadCombinedPdf(env.envelopeId);
-      const safe = env.companyName.replace(/[^a-z0-9 _-]/gi, '_');
-      const fileName = `${safe} — ${SIGNED_LABEL[env.docType]} (Signed).pdf`;
-      await saveToSharePoint(env.companyName, fileName, pdf, 'application/pdf');
-      await markEnvelopeSaved(env.envelopeId);
-      saved.push(fileName);
-      // Recommendation signed → generate the two board-approval protocols.
-      if (env.docType === 'recommendation') {
-        try { await generateBoardApprovals(env.companyId, env.companyName); }
-        catch (e) { console.error('[board-approvals] auto-generate failed:', e instanceof Error ? e.message : e); }
-      }
-    } catch (e) {
-      console.error('[signed-sync] envelope', env.envelopeId, 'failed:', e instanceof Error ? e.message : e);
-      pending++;
-    }
-  }
-  return { saved, pending };
-}
-
-// POST /api/companies/:id/sync-signed — pull this company's completed envelopes.
-investmentProposalRouter.post('/api/companies/:id/sync-signed', async (req, res) => {
-  try {
-    if (!docusignConfigured() || !sharePointConfigured()) return res.json({ saved: [], pending: 0 });
-    res.json(await saveCompletedEnvelopes(await getPendingEnvelopes(req.params.id)));
-  } catch (err) {
-    console.error('[sync-signed]', err);
-    res.status(500).json({ error: 'Failed to sync signed copies', detail: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-// POST /api/signed-sweep — pull completed envelopes across ALL companies. Runs
-// on app load (and can be called by a scheduler) so signed copies land in
-// SharePoint without anyone opening the specific company.
-investmentProposalRouter.post('/api/signed-sweep', async (_req, res) => {
-  try {
-    if (!docusignConfigured() || !sharePointConfigured()) return res.json({ saved: [], pending: 0 });
-    res.json(await saveCompletedEnvelopes(await getAllPendingEnvelopes(50)));
-  } catch (err) {
-    console.error('[signed-sweep]', err);
-    res.status(500).json({ error: 'Failed to sweep signed copies', detail: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-// Pull the envelope id + completed status out of a DocuSign Connect payload,
-// tolerating both the JSON (aani) and legacy XML formats.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractEnvelope(body: any): { envelopeId?: string; completed: boolean } {
-  if (body && typeof body === 'object') {
-    const envelopeId = body.data?.envelopeId ?? body.envelopeId ?? body.data?.envelopeSummary?.envelopeId;
-    const status = String(body.event ?? body.data?.envelopeSummary?.status ?? body.status ?? '').toLowerCase();
-    return { envelopeId, completed: status.includes('completed') };
-  }
-  const s = String(body ?? '');
-  const m = s.match(/<EnvelopeID>([^<]+)<\/EnvelopeID>/i) ?? s.match(/"envelopeId"\s*:\s*"([^"]+)"/i);
-  const completed = /<Status>\s*Completed\s*<\/Status>/i.test(s) || /"status"\s*:\s*"completed"/i.test(s) || /envelope-completed/i.test(s);
-  return { envelopeId: m?.[1], completed };
-}
-
-// POST /api/docusign/connect — DocuSign completion webhook. When an envelope is
-// completed, download the signed combined PDF and save it to the same SharePoint
-// company folder as the draft. Protected by a shared-secret token.
-investmentProposalRouter.post('/api/docusign/connect', express.text({ type: '*/*', limit: '30mb' }), async (req, res) => {
-  const secret = process.env.DOCUSIGN_CONNECT_SECRET;
-  if (secret && req.query.token !== secret) { res.status(401).end(); return; }
-  try {
-    const { envelopeId, completed } = extractEnvelope(req.body);
-    if (!envelopeId || !completed) { res.status(200).end(); return; }
-    const map = await getEnvelope(envelopeId);
-    if (!map) { res.status(200).end(); return; }        // not one of ours
-    if (map.savedAt) { res.status(200).end(); return; }  // already saved
-    if (!sharePointConfigured()) { res.status(200).end(); return; }
-
-    const pdf = await downloadCombinedPdf(envelopeId);
-    const safe = map.companyName.replace(/[^a-z0-9 _-]/gi, '_');
-    await saveToSharePoint(map.companyName, `${safe} — ${SIGNED_LABEL[map.docType]} (Signed).pdf`, pdf, 'application/pdf');
-    await markEnvelopeSaved(envelopeId);
-    console.log(`[docusign-connect] saved signed PDF for envelope ${envelopeId} (${map.companyName})`);
-    // Recommendation signed → generate the two board-approval protocols.
-    if (map.docType === 'recommendation') {
-      try { await generateBoardApprovals(map.companyId, map.companyName); }
-      catch (e) { console.error('[board-approvals] auto-generate (webhook) failed:', e instanceof Error ? e.message : e); }
-    }
-    res.status(200).end();
-  } catch (err) {
-    // Non-200 → DocuSign retries later (requireAcknowledgment is on).
-    console.error('[docusign-connect] failed:', err instanceof Error ? err.message : err);
-    res.status(500).end();
-  }
-});
-
-// GET /api/signers — the server-authoritative signer allowlist for the dropdown.
-investmentProposalRouter.get('/api/signers', (_req, res) => {
-  res.json({ signers: SIGNERS });
-});
-
-// ── Drafting guide (house-style learning, per document type) ─────────────────
-function parseDocType(v: unknown): DocType | null {
-  return v === 'proposal' || v === 'recommendation' ? v : null;
-}
-
-// GET current guide text for a doc type.
-investmentProposalRouter.get('/api/drafting-guide/:type', async (req, res) => {
-  const dt = parseDocType(req.params.type);
-  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
-  res.json({ guide: await getDraftingGuide(dt) });
-});
-
-// POST past documents (base64 files) to seed/augment a guide from exemplars.
-investmentProposalRouter.post('/api/drafting-guide/:type/seed', async (req, res) => {
-  const dt = parseDocType(req.params.type);
-  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const files: any[] = Array.isArray(req.body?.files) ? req.body.files : [];
-    if (files.length === 0) return res.status(400).json({ error: 'No files provided.' });
-    const examples: { name: string; text: string }[] = [];
-    for (const f of files) {
-      try {
-        const text = await extractText(String(f.name ?? dt), String(f.data ?? ''));
-        if (text) examples.push({ name: String(f.name ?? dt), text });
-      } catch { /* skip unreadable file */ }
-    }
-    if (examples.length === 0) return res.status(400).json({ error: 'Could not read text from the uploaded files.' });
-    await seedGuideFromExamples(dt, examples);
-    res.json({ ok: true, learnedFrom: examples.map((e) => e.name), guide: await getDraftingGuide(dt) });
-  } catch (err) {
-    console.error('[drafting-guide/seed]', err);
-    res.status(500).json({ error: 'Failed to seed the drafting guide', detail: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-// DELETE a guide (start over).
-investmentProposalRouter.delete('/api/drafting-guide/:type', async (req, res) => {
-  const dt = parseDocType(req.params.type);
-  if (!dt) return res.status(400).json({ error: 'Unknown document type.' });
-  await resetGuide(dt);
-  res.json({ ok: true });
-});
-
 
 // POST /api/companies/:id/investment-proposal/send-for-signing
 // Body: { signerEmails: string[] } — must be exactly two, both on the allowlist.

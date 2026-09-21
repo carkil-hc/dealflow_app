@@ -3,7 +3,7 @@ import sql from 'mssql';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
 import { rowToCompany } from './companies.js';
-import { buildProposalDocx, ProposalData } from './investmentProposal.js';
+import { buildProposalDocx, ProposalData } from './proposalDocx.js';
 import { saveToSharePoint, sharePointConfigured, getProposalFromSharePoint } from './sharepoint.js';
 import { SIGNERS, sendForSignature, docusignConfigured } from './docusign.js';
 import { recordEnvelope } from './envelopeStore.js';
