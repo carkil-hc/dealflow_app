@@ -89,14 +89,15 @@ export async function buildProposalDocx(
   const doc = new Document({
     styles: { default: { document: { run: { font: FONT, size: 20 } } } },
     sections: [{
-      properties: {},
+      // Narrow margins (~0.6") to help the whole document fit within 3 pages.
+      properties: { page: { margin: { top: 864, bottom: 864, left: 864, right: 864 } } },
       children: [
         new Paragraph({
-          spacing: { after: 240 },
+          spacing: { after: 160 },
           children: [new TextRun({ text: title, bold: true, font: FONT, size: 24 })],
         }),
         new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: NO_BORDERS, rows }),
-        new Paragraph({ spacing: { before: 480 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
+        new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: 'HealthCap IX Advisor AB', bold: true, font: FONT, size: 20 })] }),
         // Two-column signature block: each anchor lives in its own cell so the
         // DocuSign signature tabs are placed a full half-page apart (they used to
         // overlap when both anchors sat on one line).
@@ -107,7 +108,7 @@ export async function buildProposalDocx(
             new TableRow({ children: [
               new TableCell({
                 width: { size: 50, type: WidthType.PERCENTAGE },
-                margins: { top: 480, right: 240 },
+                margins: { top: 360, right: 240 },
                 children: [
                   // Invisible anchor sits at the START of the signature line, so
                   // the DocuSign tab tracks to the line (raised onto it via the
@@ -120,7 +121,7 @@ export async function buildProposalDocx(
               }),
               new TableCell({
                 width: { size: 50, type: WidthType.PERCENTAGE },
-                margins: { top: 480, left: 240 },
+                margins: { top: 360, left: 240 },
                 children: [
                   new Paragraph({ children: [
                     new TextRun({ text: '{{sig2}}', color: 'FFFFFF', size: 2, font: FONT }),
@@ -211,7 +212,7 @@ Rules:
 - Use EXACTLY those section headings, in that order. Optionally insert a "Products" section immediately after "Activities" only if the materials describe specific product(s)/asset(s) in depth.
 - Ground every statement ONLY in the provided company data and attached documents. Do NOT invent clinical results, financials, investors, or valuations.
 - Where a figure or term is not available, write "TBD" (valuations as "TBD MEUR"), matching house style.
-- Match a concise, formal ~2-3 page style: each section 1-3 short paragraphs. Use "\\n" to separate paragraphs within a section's content.
+- HARD LENGTH LIMIT: the finished Word document — title, the metadata rows, ALL sections, and the signature page — must fit within 3 pages total. Keep the combined body of all sections to at most ~750 words. Use ONE short paragraph per section (a second only when essential). Be concise and non-repetitive; favour tight, information-dense sentences over elaboration. Use "\\n" to separate paragraphs within a section's content.
 - "Recommendation" should, in the standard house style, recommend that HealthCap IX conducts in-depth due diligence to evaluate the opportunity, unless the materials clearly indicate a different recommendation.
 
 Company data (from the deal system):

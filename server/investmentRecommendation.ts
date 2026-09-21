@@ -145,7 +145,7 @@ Rules:
 - Use EXACTLY those section headings, in that order.
 - Ground every statement ONLY in the provided Investment Proposal and company data. Do NOT invent clinical results, financials, investors, or valuations.
 - The "Recommendation" section MUST be decisive in the house style: "It is recommended that HealthCap IX D AB and HealthCap IX E AB collectively invest [amount] in the [round] of ${c.name}." Reflect the verified Amount and Terms (including tranches if stated), and note that investment documentation is prepared by the company's legal counsel (amendment agreements to the SHA and IA) where appropriate.
-- Match a concise, formal style; each section 1-3 short paragraphs. Use "\\n" to separate paragraphs within a section.
+- HARD LENGTH LIMIT: the finished Word document — title, metadata rows, ALL sections, and the signature page — must fit within 3 pages total. Keep the combined body of all sections to at most ~750 words. Use ONE short paragraph per section (a second only when essential). Be concise and non-repetitive. Use "\\n" to separate paragraphs within a section.
 
 Company data (from the deal system):
 ${JSON.stringify(fields, null, 2)}
