@@ -18,11 +18,21 @@ export interface KolRecord {
 
 interface Agg { name: string; orcid: string | null; total: number; lead: number; insts: Map<string, number>; country: string | null; }
 
+// Cell-therapy / regeneration primary topics (chosen from the primary-topic
+// distribution of PD cell-therapy works). Anchoring on these AND the disease
+// concept keeps clinical/translational cell-therapy work and drops off-topic
+// papers (e.g. computational basal-ganglia modelling) that merely mention the terms.
+const CELL_THERAPY_TOPICS = [
+  'T10505', // Pluripotent Stem Cells Research
+  'T10483', // Nerve injury and regeneration
+  'T10176', // Mesenchymal stem cell research
+];
+
 export async function collectAcademics(diseaseName = "Parkinson's disease", top = 12): Promise<KolRecord[]> {
   const c = await getJson(`https://api.openalex.org/concepts?search=${encodeURIComponent(diseaseName)}&per_page=1`);
   const cid = String(c.results?.[0]?.id ?? '').split('/').pop();
   if (!cid) return [];
-  const filter = `concepts.id:${cid},from_publication_date:2019-01-01,title_and_abstract.search:${encodeURIComponent('dopaminergic neuron transplantation OR stem cell replacement OR cell therapy')}`;
+  const filter = `concepts.id:${cid},primary_topic.id:${CELL_THERAPY_TOPICS.join('|')},from_publication_date:2019-01-01`;
 
   const authors = new Map<string, Agg>();
   let cursor = '*'; let pages = 0;
