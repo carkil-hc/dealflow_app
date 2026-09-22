@@ -1,0 +1,13 @@
+{
+  "name": "dealflow-graph",
+  "private": true,
+  "type": "module",
+  "description": "Dealflow Intelligence Graph — Cosmos Gremlin loaders (Phase 1)",
+  "dependencies": {
+    "gremlin": "^3.7.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.3"
+  }
+}
