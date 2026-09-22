@@ -15,7 +15,7 @@
 // co-locate, so within-slice traversals are single-partition. Reference nodes shared
 // across slices are written once per slice they appear in. Revisit at multi-slice scale.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2; // v2: added develops_for (DealflowCompany -> Disease)
 
 export const GRAPH = {
   account: 'hc-dealflow-graph',
@@ -61,6 +61,7 @@ export const VERTICES: Record<string, VertexDef> = {
 export interface EdgeDef { label: string; from: string; to: string; props?: string[]; }
 
 export const EDGES: EdgeDef[] = [
+  { label: 'develops_for',      from: 'DealflowCompany', to: 'Disease' },
   { label: 'competes_with',     from: 'DealflowCompany', to: 'Company' },
   { label: 'develops',          from: 'Company',   to: 'Program' },
   { label: 'has_target',        from: 'Program',   to: 'Target' },
