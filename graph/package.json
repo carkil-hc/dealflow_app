@@ -4,7 +4,9 @@
   "type": "module",
   "description": "Dealflow Intelligence Graph — Cosmos Gremlin loaders (Phase 1)",
   "dependencies": {
-    "gremlin": "^3.7.3"
+    "@azure/identity": "^4.13.1",
+    "gremlin": "^3.7.3",
+    "mssql": "^9.3.2"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
