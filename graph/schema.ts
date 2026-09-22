@@ -15,7 +15,7 @@
 // co-locate, so within-slice traversals are single-partition. Reference nodes shared
 // across slices are written once per slice they appear in. Revisit at multi-slice scale.
 
-export const SCHEMA_VERSION = 2; // v2: added develops_for (DealflowCompany -> Disease)
+export const SCHEMA_VERSION = 3; // v3: Person gains recentWorks/leadWorks (KOL leadership ranking)
 
 export const GRAPH = {
   account: 'hc-dealflow-graph',
@@ -50,7 +50,7 @@ export const VERTICES: Record<string, VertexDef> = {
   Financing:       { canonicalId: 'financing id', required: ['roundType'], optional: ['amountRaised', 'currency', 'date', 'preMoneyValuation', 'postMoneyValuation'] },
   Deal:            { canonicalId: 'deal id', required: ['dealType'], optional: ['value', 'currency', 'date'] },
   Investor:        { canonicalId: 'normalised investor key', required: ['name'], optional: ['type'] },
-  Person:          { canonicalId: 'ORCID, else OpenAlex author id', required: ['name'], optional: ['orcid', 'openAlexId', 'country'] },
+  Person:          { canonicalId: 'ORCID, else OpenAlex author id', required: ['name'], optional: ['orcid', 'openAlexId', 'country', 'recentWorks', 'leadWorks'] },
   Institution:     { canonicalId: 'ROR, else OpenAlex institution id', required: ['name'], optional: ['country', 'type'] },
   Publication:     { canonicalId: 'DOI, else PMID, else OpenAlex work id', required: ['title'], optional: ['year', 'venue', 'findingsSummary'] },
   Patent:          { canonicalId: 'Lens id, else publication number', required: ['title'], optional: ['date'] },

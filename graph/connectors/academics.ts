@@ -1,6 +1,9 @@
 // Academic connector: concept-anchored OpenAlex (Parkinson's concept AND
-// cell-therapy terms, recent) → top authors resolved to ORCID / OpenAlex id.
-// Emits KOL records for the loader.
+// cell-therapy terms, recent), ranked by LEADERSHIP authorship. Authors are
+// scored by how often they are first/last author on the matched works (the
+// senior/lead signal), not by raw co-authorship count — this demotes
+// middle-author ride-alongs from large consortia and lifts the real KOLs.
+// ORCID + institution come from the authorship records (no per-author calls).
 import { getJson } from '../http.js';
 
 export interface KolRecord {
@@ -9,29 +12,50 @@ export interface KolRecord {
   orcid: string | null;
   institution: string | null;
   country: string | null;
-  recentWorks: number;
+  recentWorks: number;   // total matched works the author appears on
+  leadWorks: number;     // matched works where they are first or last author
 }
+
+interface Agg { name: string; orcid: string | null; total: number; lead: number; insts: Map<string, number>; country: string | null; }
 
 export async function collectAcademics(diseaseName = "Parkinson's disease", top = 12): Promise<KolRecord[]> {
   const c = await getJson(`https://api.openalex.org/concepts?search=${encodeURIComponent(diseaseName)}&per_page=1`);
   const cid = String(c.results?.[0]?.id ?? '').split('/').pop();
   if (!cid) return [];
   const filter = `concepts.id:${cid},from_publication_date:2019-01-01,title_and_abstract.search:${encodeURIComponent('dopaminergic neuron transplantation OR stem cell replacement OR cell therapy')}`;
-  const gr = await getJson(`https://api.openalex.org/works?filter=${filter}&group_by=authorships.author.id&per_page=200`);
-  const keys = (gr.group_by ?? []).slice(0, top);
-  const out: KolRecord[] = [];
-  for (const k of keys) {
-    try {
-      const au = await getJson('https://api.openalex.org/authors/' + String(k.key).split('/').pop());
-      out.push({
-        name: au.display_name,
-        openAlexId: String(au.id).split('/').pop(),
-        orcid: au.orcid ? au.orcid.replace('https://orcid.org/', '') : null,
-        institution: au.last_known_institutions?.[0]?.display_name ?? null,
-        country: au.last_known_institutions?.[0]?.country_code ?? null,
-        recentWorks: k.count,
-      });
-    } catch { /* skip an author that fails to resolve */ }
-  }
-  return out;
+
+  const authors = new Map<string, Agg>();
+  let cursor = '*'; let pages = 0;
+  do {
+    const d = await getJson(`https://api.openalex.org/works?filter=${filter}&per_page=200&sort=cited_by_count:desc&cursor=${encodeURIComponent(cursor)}`);
+    for (const w of (d.results ?? [])) {
+      for (const a of (w.authorships ?? [])) {
+        const id = a.author?.id; if (!id) continue;
+        let e = authors.get(id);
+        if (!e) { e = { name: a.author.display_name, orcid: a.author.orcid ? a.author.orcid.replace('https://orcid.org/', '') : null, total: 0, lead: 0, insts: new Map(), country: null }; authors.set(id, e); }
+        e.total++;
+        if (a.author_position === 'first' || a.author_position === 'last') e.lead++;
+        for (const inst of (a.institutions ?? [])) {
+          if (inst.display_name) e.insts.set(inst.display_name, (e.insts.get(inst.display_name) ?? 0) + 1);
+          if (!e.country && inst.country_code) e.country = inst.country_code;
+        }
+      }
+    }
+    cursor = d.meta?.next_cursor; pages++;
+  } while (cursor && pages < 3);
+
+  return [...authors.entries()]
+    .map(([id, e]) => ({ id, e, score: e.lead * 3 + e.total }))
+    .filter(x => x.e.lead > 0)                       // must have led at least one matched work
+    .sort((a, b) => b.score - a.score)
+    .slice(0, top)
+    .map(({ id, e }) => ({
+      name: e.name,
+      openAlexId: String(id).split('/').pop()!,
+      orcid: e.orcid,
+      institution: [...e.insts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+      country: e.country,
+      recentWorks: e.total,
+      leadWorks: e.lead,
+    }));
 }

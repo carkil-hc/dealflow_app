@@ -23,6 +23,11 @@ async function loadSlice() {
   const g = openGraph();
   const summary: Record<string, unknown> = { disease: pk };
   try {
+    // Optional: clear the slice's KOL nodes before reload (e.g. after a ranking change).
+    if (process.env.RESET_KOLS) {
+      await g.run("g.V().hasLabel('Person').has('pk',pk).drop()", { pk });
+      await g.run("g.V().hasLabel('Institution').has('pk',pk).drop()", { pk });
+    }
     await g.upsertVertex('Disease', pk, pk, { name: dis.label ?? seed.diseaseName, mondo: pk, ...prov('OpenTargets', 'https://platform.opentargets.org') });
     await g.upsertVertex('DealflowCompany', seed.id, pk, { name: seed.name, modality: seed.modality, seedDisease: pk, ...prov('Dealflow', 'internal') });
     await g.upsertEdge('develops_for', seed.id, pk, prov('Dealflow', 'internal'));
@@ -52,7 +57,7 @@ async function loadSlice() {
     const kols = await collectAcademics("Parkinson's disease", 12);
     for (const k of kols) {
       const pid = k.orcid ? `ORCID:${k.orcid}` : `OPENALEX:${k.openAlexId}`;
-      await g.upsertVertex('Person', pid, pk, { name: k.name, orcid: k.orcid ?? undefined, openAlexId: k.openAlexId, country: k.country ?? undefined, ...prov('OpenAlex', 'https://openalex.org/' + k.openAlexId) });
+      await g.upsertVertex('Person', pid, pk, { name: k.name, orcid: k.orcid ?? undefined, openAlexId: k.openAlexId, country: k.country ?? undefined, recentWorks: k.recentWorks, leadWorks: k.leadWorks, ...prov('OpenAlex', 'https://openalex.org/' + k.openAlexId) });
       await g.upsertEdge('researches', pid, pk, prov('OpenAlex', 'https://openalex.org', 'inferred'));
       if (k.institution) {
         const instId = 'inst:' + slug(k.institution);
