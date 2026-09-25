@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import sql from 'mssql';
 import Anthropic from '@anthropic-ai/sdk';
 import { getPool } from './db.js';
 import { askClaudeJson } from './anthropic.js';
@@ -114,6 +115,18 @@ async function processIngest(payload: Record<string, any>): Promise<void> {
   const pool = await getPool();
   await upsertOne(pool, company);
   console.log(`[ingest] saved company "${company.name}" id=${company.id} pdfAttached=${attachments.length > 0}`);
+
+  // Enqueue a competitive-intelligence collection job for the new company
+  // (best-effort; drained by the graph Container Apps Job worker).
+  try {
+    const now2 = new Date().toISOString();
+    await pool.request().input('id', sql.NVarChar(50), company.id).input('now', sql.NVarChar(30), now2)
+      .query(`MERGE graph_jobs AS t USING (SELECT @id AS company_id) AS s ON t.company_id = s.company_id
+        WHEN MATCHED THEN UPDATE SET status='pending', enqueued_at=@now, error=NULL
+        WHEN NOT MATCHED THEN INSERT (company_id, status, enqueued_at, attempts) VALUES (@id, 'pending', @now, 0);`);
+  } catch (e) {
+    console.error('[ingest] enqueue graph job failed:', e instanceof Error ? e.message : e);
+  }
 }
 
 export const ingestRouter = Router();

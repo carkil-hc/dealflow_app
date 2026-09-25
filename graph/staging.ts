@@ -2,12 +2,7 @@
 // stg_raw_records). Connectors write raw fetched records here with provenance;
 // the loader reads them to resolve + upsert into the graph — so the graph can be
 // rebuilt without re-fetching, and every fetch is auditable.
-//
-// Auth: Azure SQL via AAD token (DefaultAzureCredential = the App Service managed
-// identity in prod, or your `az login` locally). Needs AZURE_SQL_SERVER /
-// AZURE_SQL_DATABASE in env (same values as the dealflow app).
-import sql from 'mssql';
-import { DefaultAzureCredential } from '@azure/identity';
+import { openSql, sql } from './db.js';
 
 export interface RawRecord {
   source: string;       // 'clinicaltrials.gov' | 'openalex' | ...
@@ -18,24 +13,11 @@ export interface RawRecord {
   payload: unknown;     // the raw record (stored as JSON)
 }
 
-const cred = new DefaultAzureCredential();
-
 export class Staging {
-  private constructor(private pool: sql.ConnectionPool) {}
+  constructor(private pool: sql.ConnectionPool) {}
 
-  static async open(): Promise<Staging> {
-    const server = process.env.AZURE_SQL_SERVER, database = process.env.AZURE_SQL_DATABASE;
-    if (!server || !database) throw new Error('AZURE_SQL_SERVER / AZURE_SQL_DATABASE not set');
-    const token = (await cred.getToken('https://database.windows.net/.default')).token;
-    const pool = await new sql.ConnectionPool({
-      server, database,
-      options: { encrypt: true, trustServerCertificate: false },
-      connectionTimeout: 60000, requestTimeout: 60000,
-      authentication: { type: 'azure-active-directory-access-token', options: { token } },
-    }).connect();
-    return new Staging(pool);
-  }
-
+  // Convenience for CLI use: open a dedicated pool.
+  static async open(): Promise<Staging> { return new Staging(await openSql()); }
   async close() { await this.pool.close(); }
 
   // Idempotent upsert of raw records (MERGE on source+id). Payload is retained.

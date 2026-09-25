@@ -44,12 +44,17 @@ async function ctgov(condition: string, intr: string): Promise<ProgramRecord[]> 
   return out;
 }
 
-// Returns the cell/dopaminergic-neuron programs (the modality relevant to a
-// stem-cell dealflow company), deduped, capped.
-export async function collectCompetitors(condition = 'Parkinson Disease', cap = 30): Promise<ProgramRecord[]> {
-  const queries = ['stem cell', 'dopaminergic', 'pluripotent', 'progenitor cell', 'cell transplantation', 'neuron'];
+// Competitor programs for a disease. When cellTherapy is set, restrict to
+// cell/dopaminergic-neuron programs (the modality relevant to a stem-cell
+// company); otherwise return all deduped programs for the condition.
+export async function collectCompetitors(condition: string, opts: { cellTherapy?: boolean; cap?: number } = {}): Promise<ProgramRecord[]> {
+  const cap = opts.cap ?? 30;
+  const queries = opts.cellTherapy
+    ? ['stem cell', 'dopaminergic', 'pluripotent', 'progenitor cell', 'cell transplantation', 'neuron']
+    : ['']; // empty intervention term = all interventions for the condition
   const byNct = new Map<string, ProgramRecord>();
   for (const q of queries) for (const p of await ctgov(condition, q)) if (p.nct && !byNct.has(p.nct)) byNct.set(p.nct, p);
-  const pluri = [...byNct.values()].filter(p => { const h = `${p.title} ${p.interventions}`; return PLURI.test(h) && !MSC.test(h); });
-  return pluri.slice(0, cap);
+  let list = [...byNct.values()];
+  if (opts.cellTherapy) list = list.filter(p => { const h = `${p.title} ${p.interventions}`; return PLURI.test(h) && !MSC.test(h); });
+  return list.slice(0, cap);
 }

@@ -28,11 +28,15 @@ const CELL_THERAPY_TOPICS = [
   'T10176', // Mesenchymal stem cell research
 ];
 
-export async function collectAcademics(diseaseName = "Parkinson's disease", top = 12): Promise<KolRecord[]> {
+export async function collectAcademics(diseaseName = "Parkinson's disease", opts: { cellTherapy?: boolean; top?: number } = {}): Promise<KolRecord[]> {
+  const top = opts.top ?? 12;
   const c = await getJson(`https://api.openalex.org/concepts?search=${encodeURIComponent(diseaseName)}&per_page=1`);
   const cid = String(c.results?.[0]?.id ?? '').split('/').pop();
   if (!cid) return [];
-  const filter = `concepts.id:${cid},primary_topic.id:${CELL_THERAPY_TOPICS.join('|')},from_publication_date:2019-01-01`;
+  // Cell-therapy companies: anchor on cell-therapy primary topics for precision.
+  // Other modalities: concept + leadership ranking only (no cell-topic filter).
+  const topicClause = opts.cellTherapy ? `,primary_topic.id:${CELL_THERAPY_TOPICS.join('|')}` : '';
+  const filter = `concepts.id:${cid}${topicClause},from_publication_date:2019-01-01`;
 
   const authors = new Map<string, Agg>();
   let cursor = '*'; let pages = 0;

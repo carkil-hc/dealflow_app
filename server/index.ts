@@ -12,6 +12,7 @@ import { investmentRecommendationRouter } from './investmentRecommendation.js';
 import { boardApprovalRouter } from './boardApproval.js';
 import { signingRouter } from './signing.js';
 import { draftingGuideRouter } from './draftingGuide.js';
+import { graphJobsRouter } from './graphJobs.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -30,6 +31,7 @@ app.use(investmentRecommendationRouter);
 app.use(boardApprovalRouter);
 app.use(signingRouter);
 app.use(draftingGuideRouter);
+app.use(graphJobsRouter);
 
 // Serve the built React app for all non-API routes in production
 if (isProd) {
