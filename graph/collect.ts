@@ -7,7 +7,7 @@ import { Staging, RawRecord } from './staging.js';
 import { getCompanyRow } from './companies.js';
 import { extractSeed } from './seed.js';
 import { resolveDisease, resolveCompany } from './resolvers.js';
-import { collectCompetitors, ProgramRecord } from './connectors/competitors.js';
+import { collectCompetitors, classifyProgram, ProgramRecord } from './connectors/competitors.js';
 import { collectAcademics, KolRecord } from './connectors/academics.js';
 import { collectFinancings, collectDeals, FinancingRecord, DealRecord } from './connectors/financings.js';
 
@@ -16,7 +16,9 @@ const CT = (nct: string) => `https://clinicaltrials.gov/study/${nct}`;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const firstIntervention = (s: string) => (s.split('|')[0]?.split(':').slice(1).join(':').trim() || '').slice(0, 120);
 
-export interface CollectOpts { reprocess?: boolean; resetKols?: boolean }
+export interface CollectOpts { reprocess?: boolean; resetKols?: boolean; resetPrograms?: boolean }
+
+const modSlug = (m: string) => 'modality:' + m.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 export async function runCollectionForCompany(companyId: string, opts: CollectOpts = {}): Promise<Record<string, unknown>> {
   const pool = await openSql();
@@ -33,9 +35,17 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     const dfId = 'dealflow:' + companyId;
     Object.assign(summary, { company: c.name, seed, slice: pk, cellTherapy });
 
+    // ── reset the competitor sub-graph (e.g. after a reclassification) ──
+    if (opts.resetPrograms) {
+      for (const label of ['Program', 'ClinicalTrial', 'Modality', 'Company']) {
+        await g.run(`g.V().hasLabel('${label}').has('pk',pk).drop()`, { pk });
+      }
+      await staging.clear('clinicaltrials.gov', { slice: pk, recordType: 'trial' });
+    }
+
     // ── fetch + stage (unless reprocessing) ──
     if (!opts.reprocess) {
-      const programs = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 30 });
+      const programs = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 45 });
       const kols = await collectAcademics(seed.diseaseName, { cellTherapy, top: 12 });
       const recs: RawRecord[] = [
         ...programs.map(p => ({ source: 'clinicaltrials.gov', id: p.nct, recordType: 'trial', slice: pk, url: CT(p.nct), payload: p })),
@@ -44,10 +54,15 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       // Financings/deals per distinct competitor (SEC EDGAR; capped to bound calls).
       const sponsors = [...new Map(programs.map(p => [resolveCompany(p.sponsor).canonicalId, p.sponsor]).filter(([id]) => id)).values()].slice(0, 15) as string[];
       for (const name of sponsors) {
-        const fins = await collectFinancings(name, 8);
-        const deals = await collectDeals(name, 5);
-        for (const f of fins) recs.push({ source: 'sec.gov', id: f.id, recordType: 'financing', slice: pk, url: f.url, payload: f });
-        for (const d of deals) recs.push({ source: 'sec.gov', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
+        try { // one company's EDGAR hiccup must not abort the whole collection
+          const fins = await collectFinancings(name, 8);
+          const deals = await collectDeals(name, 5);
+          for (const f of fins) recs.push({ source: 'sec.gov', id: f.id, recordType: 'financing', slice: pk, url: f.url, payload: f });
+          for (const d of deals) recs.push({ source: 'sec.gov', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
+        } catch {
+          const errs = (summary.edgarErrors as string[]) ?? (summary.edgarErrors = [] as string[]);
+          errs.push(name);
+        }
       }
       summary.staged = await staging.put(recs);
     }
@@ -70,10 +85,14 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       const coId = co.canonicalId; companies.add(coId);
       const phase = (p.phase ?? []).join('/') || 'NA';
       const progId = `program:${coId.replace('company:', '')}:${p.nct}`;
+      const cls = classifyProgram(p); // deterministic; robust to older staged records
       await g.upsertVertex('Company', coId, pk, { name: p.sponsor, ...prov('ClinicalTrials.gov', 'https://clinicaltrials.gov') });
       await g.upsertEdge('competes_with', dfId, coId, prov('Dealflow', 'internal', 'inferred'));
-      await g.upsertVertex('Program', progId, pk, { name: firstIntervention(p.interventions) || p.title.slice(0, 120), modality: seed.modality, developmentStage: phase, status: p.discontinued ? 'discontinued' : 'active', ...prov('ClinicalTrials.gov', CT(p.nct)) });
+      await g.upsertVertex('Program', progId, pk, { name: firstIntervention(p.interventions) || p.title.slice(0, 120), modality: cls.modality, isCellTherapy: cls.isCellTherapy, developmentStage: phase, status: p.discontinued ? 'discontinued' : 'active', ...prov('ClinicalTrials.gov', CT(p.nct)) });
       await g.upsertEdge('develops', coId, progId, prov('ClinicalTrials.gov', CT(p.nct)));
+      const modId = modSlug(cls.modality);
+      await g.upsertVertex('Modality', modId, pk, { name: cls.modality, ...prov('ClinicalTrials.gov', CT(p.nct), 'inferred') });
+      await g.upsertEdge('has_modality', progId, modId, prov('ClinicalTrials.gov', CT(p.nct), 'inferred'));
       await g.upsertEdge('treats', progId, pk, prov('ClinicalTrials.gov', CT(p.nct), 'inferred'));
       await g.upsertVertex('ClinicalTrial', p.nct, pk, { title: p.title.slice(0, 200), phase, status: p.status, sponsor: p.sponsor, ...prov('ClinicalTrials.gov', CT(p.nct)) });
       await g.upsertEdge('tested_in', progId, p.nct, prov('ClinicalTrials.gov', CT(p.nct)));
@@ -118,6 +137,8 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     summary.discontinued_programs = await one("g.V().hasLabel('Program').has('pk',pk).has('status','discontinued').count()");
     summary.competitor_companies = await one("g.V(sid).out('competes_with').count()", { sid: dfId });
     summary.kol_nodes = await one("g.V().hasLabel('Person').has('pk',pk).count()");
+    summary.cell_therapy_programs = await one("g.V().hasLabel('Program').has('pk',pk).has('isCellTherapy',true).count()");
+    summary.modality_breakdown = await one("g.V().hasLabel('Program').has('pk',pk).groupCount().by('modality')");
     summary.financing_nodes = await one("g.V().hasLabel('Financing').has('pk',pk).count()");
     summary.deal_nodes = await one("g.V().hasLabel('Deal').has('pk',pk).count()");
     // competitors with any observed financing (backward traversal: Financing←raised←Company)

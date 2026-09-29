@@ -41,6 +41,16 @@ export class Staging {
     return records.length;
   }
 
+  // Drop staged rows for a source (optionally a slice/type) — used when a
+  // reclassification means the previously staged set should be rebuilt clean.
+  async clear(source: string, opts: { slice?: string; recordType?: string } = {}): Promise<void> {
+    let q = 'DELETE FROM stg_raw_records WHERE source = @source';
+    const req = this.pool.request().input('source', sql.NVarChar(50), source);
+    if (opts.slice) { q += ' AND slice = @slice'; req.input('slice', sql.NVarChar(100), opts.slice); }
+    if (opts.recordType) { q += ' AND record_type = @rt'; req.input('rt', sql.NVarChar(50), opts.recordType); }
+    await req.query(q);
+  }
+
   // Read staged payloads back for reprocessing.
   async get<T = unknown>(source: string, opts: { slice?: string; recordType?: string } = {}): Promise<T[]> {
     let q = 'SELECT payload FROM stg_raw_records WHERE source = @source';
