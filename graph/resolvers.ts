@@ -16,10 +16,11 @@ export interface Resolution {
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-async function getJson(url: string, opts?: RequestInit): Promise<any> {
+const UA = 'HealthCap-Dealflow-Graph/1.0 (+https://dealflow.healthcap.eu)';
+async function getJson(url: string, opts: RequestInit = {}): Promise<any> {
   let last = '';
   for (let i = 0; i < 5; i++) {
-    const r = await fetch(url, opts);
+    const r = await fetch(url, { ...opts, headers: { 'User-Agent': UA, 'Accept': 'application/json', ...(opts.headers ?? {}) } });
     if (r.ok) return r.json();
     last = `${r.status}`;
     if (r.status === 503 || r.status === 429) { await sleep(3000); continue; }
