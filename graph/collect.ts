@@ -10,6 +10,7 @@ import { resolveDisease, resolveCompany } from './resolvers.js';
 import { collectCompetitors, classifyProgram, ProgramRecord } from './connectors/competitors.js';
 import { collectAcademics, KolRecord } from './connectors/academics.js';
 import { collectFinancings, collectDeals, FinancingRecord, DealRecord } from './connectors/financings.js';
+import { collectNewsDeals, NewsDeal } from './connectors/newsdeals.js';
 
 const prov = (source: string, url: string, trustTier = 'structured') => ({ source, url, retrievedAt: new Date().toISOString(), trustTier });
 const CT = (nct: string) => `https://clinicaltrials.gov/study/${nct}`;
@@ -61,6 +62,18 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
           for (const d of deals) recs.push({ source: 'sec.gov', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
         } catch {
           const errs = (summary.edgarErrors as string[]) ?? (summary.edgarErrors = [] as string[]);
+          errs.push(name);
+        }
+      }
+      // News/Wikipedia deals (acquisitions/licensing incl. private targets &
+      // foreign acquirers that EDGAR misses). Claude-extracted, grounded; capped.
+      for (const name of sponsors.slice(0, 8)) {
+        try {
+          for (const d of await collectNewsDeals(name, { top: 2 })) {
+            recs.push({ source: 'news', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
+          }
+        } catch {
+          const errs = (summary.newsErrors as string[]) ?? (summary.newsErrors = [] as string[]);
           errs.push(name);
         }
       }
@@ -132,6 +145,25 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     summary.financings = fins.length;
     summary.deals = deals.length;
 
+    // ── news/Wikipedia deals → Deal + Company party_to / Deal deal_counterparty ──
+    const news = await staging.get<NewsDeal>('news', { slice: pk, recordType: 'deal' });
+    for (const d of news) {
+      const co = resolveCompany(d.company); if (!co.canonicalId) continue;
+      await g.upsertVertex('Company', co.canonicalId, pk, { name: d.company, ...prov(d.source, d.url, 'inferred') });
+      await g.upsertVertex('Deal', d.id, pk, { dealType: d.dealType, value: d.value ?? undefined, date: d.date ?? undefined, counterparty: d.counterparty ?? undefined, evidence: d.evidence, confidence: d.confidence, role: d.companyRole, ...prov(d.source, d.url, 'inferred') });
+      await g.upsertEdge('party_to', co.canonicalId, d.id, { role: d.companyRole, ...prov(d.source, d.url, 'inferred') });
+      // Record the buyer/partner as its own Company node + counterparty edge, when
+      // it is a single, resolvable entity (skip compound "X and Y" counterparties).
+      if (d.counterparty && !/\band\b|,|;|\//.test(d.counterparty)) {
+        const cp = resolveCompany(d.counterparty);
+        if (cp.canonicalId) {
+          await g.upsertVertex('Company', cp.canonicalId, pk, { name: d.counterparty, ...prov(d.source, d.url, 'inferred') });
+          await g.upsertEdge('deal_counterparty', d.id, cp.canonicalId, { role: d.counterpartyRole, ...prov(d.source, d.url, 'inferred') });
+        }
+      }
+    }
+    summary.news_deals = news.length;
+
     const one = async (q: string, b: Record<string, unknown> = { pk }) => (await g.run(q, b))[0];
     summary.crowding_active_ph1_3 = await one("g.V().hasLabel('Program').has('pk',pk).has('status','active').has('developmentStage',within('PHASE1','PHASE1/PHASE2','PHASE2','PHASE2/PHASE3','PHASE3')).count()");
     summary.discontinued_programs = await one("g.V().hasLabel('Program').has('pk',pk).has('status','discontinued').count()");
@@ -141,6 +173,8 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     summary.modality_breakdown = await one("g.V().hasLabel('Program').has('pk',pk).groupCount().by('modality')");
     summary.financing_nodes = await one("g.V().hasLabel('Financing').has('pk',pk).count()");
     summary.deal_nodes = await one("g.V().hasLabel('Deal').has('pk',pk).count()");
+    summary.deals_with_counterparty = await one("g.V().hasLabel('Deal').has('pk',pk).where(__.out('deal_counterparty')).count()");
+    summary.acquirers = await one("g.V().hasLabel('Deal').has('pk',pk).out('deal_counterparty').dedup().values('name').fold()");
     // competitors with any observed financing (backward traversal: Financing←raised←Company)
     summary.funded_competitors = await one("g.V().hasLabel('Financing').has('pk',pk).in('raised').dedup().count()");
     return summary;

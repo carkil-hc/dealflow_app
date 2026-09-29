@@ -15,7 +15,7 @@
 // co-locate, so within-slice traversals are single-partition. Reference nodes shared
 // across slices are written once per slice they appear in. Revisit at multi-slice scale.
 
-export const SCHEMA_VERSION = 3; // v3: Person gains recentWorks/leadWorks (KOL leadership ranking)
+export const SCHEMA_VERSION = 4; // v4: Program gains modality/isCellTherapy; Deal gains counterparty/value/evidence/confidence/role (news+EDGAR deals)
 
 export const GRAPH = {
   account: 'hc-dealflow-graph',
@@ -42,13 +42,13 @@ export interface VertexDef { canonicalId: string; required: string[]; optional: 
 export const VERTICES: Record<string, VertexDef> = {
   DealflowCompany: { canonicalId: 'dealflow company id', required: ['name'], optional: ['modality', 'seedDisease', 'seedTarget'] },
   Company:         { canonicalId: 'normalised company key (LEI when known)', required: ['name'], optional: ['aliases', 'country'] },
-  Program:         { canonicalId: 'ChEMBL / DrugBank / UNII, else sponsor+name key', required: ['name'], optional: ['modality', 'mechanismOfAction', 'developmentStage', 'status', 'clinicalDataSummary'] },
+  Program:         { canonicalId: 'ChEMBL / DrugBank / UNII, else sponsor+name key', required: ['name'], optional: ['modality', 'isCellTherapy', 'mechanismOfAction', 'developmentStage', 'status', 'clinicalDataSummary'] },
   Target:          { canonicalId: 'HGNC / UniProt / ChEMBL', required: ['symbol'], optional: ['name'] },
   Disease:         { canonicalId: 'MONDO / EFO', required: ['name'], optional: ['mesh', 'efo', 'mondo'] },
   Modality:        { canonicalId: 'controlled-vocabulary slug', required: ['name'], optional: [] },
   ClinicalTrial:   { canonicalId: 'NCT number', required: ['title', 'status'], optional: ['phase', 'sponsor', 'enrollment', 'endpoints', 'resultsSummary', 'startDate', 'completionDate'] },
   Financing:       { canonicalId: 'financing id', required: ['roundType'], optional: ['amountRaised', 'currency', 'date', 'preMoneyValuation', 'postMoneyValuation'] },
-  Deal:            { canonicalId: 'deal id', required: ['dealType'], optional: ['value', 'currency', 'date'] },
+  Deal:            { canonicalId: 'deal id', required: ['dealType'], optional: ['value', 'currency', 'date', 'counterparty', 'evidence', 'confidence', 'role'] },
   Investor:        { canonicalId: 'normalised investor key', required: ['name'], optional: ['type'] },
   Person:          { canonicalId: 'ORCID, else OpenAlex author id', required: ['name'], optional: ['orcid', 'openAlexId', 'country', 'recentWorks', 'leadWorks'] },
   Institution:     { canonicalId: 'ROR, else OpenAlex institution id', required: ['name'], optional: ['country', 'type'] },
