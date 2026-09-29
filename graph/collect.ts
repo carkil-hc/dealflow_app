@@ -9,6 +9,7 @@ import { extractSeed } from './seed.js';
 import { resolveDisease, resolveCompany } from './resolvers.js';
 import { collectCompetitors, ProgramRecord } from './connectors/competitors.js';
 import { collectAcademics, KolRecord } from './connectors/academics.js';
+import { collectFinancings, collectDeals, FinancingRecord, DealRecord } from './connectors/financings.js';
 
 const prov = (source: string, url: string, trustTier = 'structured') => ({ source, url, retrievedAt: new Date().toISOString(), trustTier });
 const CT = (nct: string) => `https://clinicaltrials.gov/study/${nct}`;
@@ -40,6 +41,14 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
         ...programs.map(p => ({ source: 'clinicaltrials.gov', id: p.nct, recordType: 'trial', slice: pk, url: CT(p.nct), payload: p })),
         ...kols.map(k => ({ source: 'openalex', id: k.openAlexId, recordType: 'author', slice: pk, url: 'https://openalex.org/' + k.openAlexId, payload: k })),
       ];
+      // Financings/deals per distinct competitor (SEC EDGAR; capped to bound calls).
+      const sponsors = [...new Map(programs.map(p => [resolveCompany(p.sponsor).canonicalId, p.sponsor]).filter(([id]) => id)).values()].slice(0, 15) as string[];
+      for (const name of sponsors) {
+        const fins = await collectFinancings(name, 8);
+        const deals = await collectDeals(name, 5);
+        for (const f of fins) recs.push({ source: 'sec.gov', id: f.id, recordType: 'financing', slice: pk, url: f.url, payload: f });
+        for (const d of deals) recs.push({ source: 'sec.gov', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
+      }
       summary.staged = await staging.put(recs);
     }
 
@@ -86,11 +95,33 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     }
     summary.kols = kols.length;
 
+    // ── financings & deals (SEC EDGAR) → Company raised Financing / Company party_to Deal ──
+    const fins = await staging.get<FinancingRecord>('sec.gov', { slice: pk, recordType: 'financing' });
+    for (const f of fins) {
+      const co = resolveCompany(f.company); if (!co.canonicalId) continue;
+      await g.upsertVertex('Company', co.canonicalId, pk, { name: f.company, ...prov('SEC EDGAR', f.url) });
+      await g.upsertVertex('Financing', f.id, pk, { roundType: f.roundType, amountRaised: f.amountUsd ?? undefined, currency: f.amountUsd ? 'USD' : undefined, date: f.date, ...prov('SEC EDGAR', f.url) });
+      await g.upsertEdge('raised', co.canonicalId, f.id, prov('SEC EDGAR', f.url));
+    }
+    const deals = await staging.get<DealRecord>('sec.gov', { slice: pk, recordType: 'deal' });
+    for (const d of deals) {
+      const co = resolveCompany(d.company); if (!co.canonicalId) continue;
+      await g.upsertVertex('Company', co.canonicalId, pk, { name: d.company, ...prov('SEC EDGAR', d.url) });
+      await g.upsertVertex('Deal', d.id, pk, { dealType: d.dealType, date: d.date, ...prov('SEC EDGAR', d.url, 'inferred') });
+      await g.upsertEdge('party_to', co.canonicalId, d.id, prov('SEC EDGAR', d.url, 'inferred'));
+    }
+    summary.financings = fins.length;
+    summary.deals = deals.length;
+
     const one = async (q: string, b: Record<string, unknown> = { pk }) => (await g.run(q, b))[0];
     summary.crowding_active_ph1_3 = await one("g.V().hasLabel('Program').has('pk',pk).has('status','active').has('developmentStage',within('PHASE1','PHASE1/PHASE2','PHASE2','PHASE2/PHASE3','PHASE3')).count()");
     summary.discontinued_programs = await one("g.V().hasLabel('Program').has('pk',pk).has('status','discontinued').count()");
     summary.competitor_companies = await one("g.V(sid).out('competes_with').count()", { sid: dfId });
     summary.kol_nodes = await one("g.V().hasLabel('Person').has('pk',pk).count()");
+    summary.financing_nodes = await one("g.V().hasLabel('Financing').has('pk',pk).count()");
+    summary.deal_nodes = await one("g.V().hasLabel('Deal').has('pk',pk).count()");
+    // competitors with any observed financing (backward traversal: Financing←raised←Company)
+    summary.funded_competitors = await one("g.V().hasLabel('Financing').has('pk',pk).in('raised').dedup().count()");
     return summary;
   } finally {
     await g.close();
