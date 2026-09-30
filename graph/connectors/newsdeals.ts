@@ -171,7 +171,7 @@ export async function collectNewsDeals(company: string, opts: { top?: number } =
 // One GDELT query over biotech trade press for the slice's topic + deal keywords.
 // Trade press is the discovery starting point: it names deals (often with amounts)
 // for companies that may not be in the clinical-trial set at all.
-async function extractHeadlines(text: string, topic: string, client: Anthropic): Promise<{ company: string; counterparty: string | null; companyRole: Role; counterpartyRole: Role; dealType: DealType; value: string | null; date: string | null; evidence: string }[]> {
+export async function extractHeadlines(text: string, topic: string, client: Anthropic): Promise<{ company: string; counterparty: string | null; companyRole: Role; counterpartyRole: Role; dealType: DealType; value: string | null; date: string | null; evidence: string }[]> {
   if (!text.trim()) return [];
   const prompt = `Each line below is a biotech trade-press headline about "${topic}", formatted "DATE: HEADLINE — domain <url>". Extract the corporate deals (acquisitions, licensing, collaborations, financings) they report.
 
