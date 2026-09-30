@@ -10,7 +10,7 @@ import { resolveDisease, resolveCompany } from './resolvers.js';
 import { collectCompetitors, classifyProgram, ProgramRecord } from './connectors/competitors.js';
 import { collectAcademics, KolRecord } from './connectors/academics.js';
 import { collectFinancings, collectDeals, FinancingRecord, DealRecord } from './connectors/financings.js';
-import { collectNewsDeals, NewsDeal } from './connectors/newsdeals.js';
+import { collectNewsDeals, collectTradePressDeals, NewsDeal } from './connectors/newsdeals.js';
 
 const prov = (source: string, url: string, trustTier = 'structured') => ({ source, url, retrievedAt: new Date().toISOString(), trustTier });
 const CT = (nct: string) => `https://clinicaltrials.gov/study/${nct}`;
@@ -77,6 +77,14 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
           errs.push(name);
         }
       }
+      // Trade-press deal sweep (one GDELT query over biotech trade press for the
+      // slice's topic) — a discovery layer that surfaces deals for companies that
+      // may not be in the clinical-trial set at all.
+      try {
+        const tp = await collectTradePressDeals([seed.diseaseName, seed.modality]);
+        for (const d of tp) recs.push({ source: 'news', id: d.id, recordType: 'deal', slice: pk, url: d.url, payload: d });
+        summary.tradePressDeals = tp.length;
+      } catch { summary.tradePressDeals = 'error'; }
       summary.staged = await staging.put(recs);
     }
 

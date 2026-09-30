@@ -57,14 +57,33 @@ function snippets(text: string, token: string, win = 320, max = 5): string {
 }
 
 // ── GDELT (free global news index; recency-oriented → forward monitoring) ──
-async function gdelt(company: string, max = 8): Promise<{ title: string; url: string; domain: string; date: string }[]> {
-  const q = `"${company}" (acquire OR acquisition OR merger OR licensing OR collaboration OR partnership OR deal)`;
-  const u = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=${max}&format=json&sort=hybridrel`;
-  try {
-    const r = await fetch(u, { headers: H }); if (!r.ok) return [];
-    const d: any = JSON.parse(await r.text());
-    return (d.articles ?? []).map((a: any) => ({ title: a.title ?? '', url: a.url ?? '', domain: a.domain ?? '', date: (a.seendate ?? '').slice(0, 8) }));
-  } catch { return []; }
+// Biotech trade press — the best discovery starting point for deals. GDELT indexes
+// their public articles; we restrict to these domains and read headlines (which in
+// trade press usually carry the deal + amount), keeping the URL to click through.
+// The core English biotech deal outlets. Kept small: GDELT returns nothing for
+// queries with too many OR-clauses, so a lean domain list is more reliable.
+const TRADE_DOMAINS = ['fiercebiotech.com', 'fiercepharma.com', 'endpts.com', 'biospace.com', 'biopharmadive.com'];
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+let lastGdelt = 0;
+// GDELT allows one request / 5s and rate-limits hard; serialise, space calls, and
+// retry on a 429 or a transient network error / non-JSON body.
+async function gdeltGet(u: string): Promise<any | null> {
+  for (let i = 0; i < 4; i++) {
+    const wait = 6000 - (Date.now() - lastGdelt); if (wait > 0) await sleep(wait);
+    lastGdelt = Date.now();
+    try {
+      const r = await fetch(u, { headers: H });
+      const t = await r.text();
+      if (r.ok && t.startsWith('{')) return JSON.parse(t);
+      // 429 / "Please limit requests…" / transient — back off and retry.
+    } catch { /* network hiccup — retry */ }
+    await sleep(2000);
+  }
+  return null;
+}
+interface Article { title: string; url: string; domain: string; date: string }
+function articles(d: any): Article[] {
+  return (d?.articles ?? []).map((a: any) => ({ title: a.title ?? '', url: a.url ?? '', domain: a.domain ?? '', date: (a.seendate ?? '').slice(0, 8) }));
 }
 
 // ── Claude extraction (grounded) ──
@@ -130,15 +149,8 @@ export async function collectNewsDeals(company: string, opts: { top?: number } =
     }
   }
 
-  // GDELT: recent news headlines (forward monitoring).
-  const arts = await gdelt(company);
-  if (arts.length) {
-    const text = arts.map(a => `${a.date}: ${a.title} (${a.domain})`).join('\n');
-    for (const d of await extract(company, text, client)) {
-      const a = arts.find(x => text.indexOf(d.evidence.slice(0, 30)) >= 0 && x.title.includes(d.evidence.slice(0, 20))) ?? arts[0];
-      found.push({ ...d, id: '', source: 'GDELT: ' + a.domain, url: a.url, confidence: 0.5 });
-    }
-  }
+  // (Trade-press/news discovery runs once per slice — see collectTradePressDeals —
+  // rather than per company, so the rate-limited GDELT API isn't hit 8× a run.)
 
   // Dedupe + corroborate: same (counterparty, type, year) collapses; more distinct
   // sources → higher confidence; keep the richest evidence.
@@ -153,4 +165,75 @@ export async function collectNewsDeals(company: string, opts: { top?: number } =
     if ((d.value && !prev.value) || d.evidence.length > prev.evidence.length) { prev.value ??= d.value; prev.evidence = d.evidence; prev.source += '; ' + d.source; }
   }
   return [...byKey.values()];
+}
+
+// ── Trade-press deal sweep (slice-level discovery) ──
+// One GDELT query over biotech trade press for the slice's topic + deal keywords.
+// Trade press is the discovery starting point: it names deals (often with amounts)
+// for companies that may not be in the clinical-trial set at all.
+async function extractHeadlines(text: string, topic: string, client: Anthropic): Promise<{ company: string; counterparty: string | null; companyRole: Role; counterpartyRole: Role; dealType: DealType; value: string | null; date: string | null; evidence: string }[]> {
+  if (!text.trim()) return [];
+  const prompt = `Each line below is a biotech trade-press headline about "${topic}", formatted "DATE: HEADLINE — domain <url>". Extract the corporate deals (acquisitions, licensing, collaborations, financings) they report.
+
+Return ONLY a JSON array; each item:
+{"company": the primary company the deal is about (string),
+ "counterparty": the other party or null,
+ "companyRole": one of ${JSON.stringify(VALID_ROLES)},
+ "counterpartyRole": one of ${JSON.stringify(VALID_ROLES)},
+ "dealType": one of ${JSON.stringify(VALID_TYPES)},
+ "value": deal value exactly as written (e.g. "$48M") or null,
+ "date": "YYYY-MM-DD" or "YYYY" or null,
+ "evidence": the headline text copied verbatim}
+
+Only include a headline that clearly states a deal. Every item MUST have an evidence quote copied verbatim from a headline. If none, return [].
+
+HEADLINES:
+${text.slice(0, 9000)}`;
+  const msg = await client.messages.create({ model: 'claude-sonnet-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] });
+  const raw = msg.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('');
+  const m = raw.match(/\[[\s\S]*\]/); if (!m) return [];
+  let arr: any[]; try { arr = JSON.parse(m[0]); } catch { return []; }
+  const low = text.toLowerCase();
+  const out: any[] = [];
+  for (const d of Array.isArray(arr) ? arr : []) {
+    const ev = String(d.evidence ?? '');
+    if (!ev || !d.company || !low.includes(ev.toLowerCase().slice(0, 40))) continue; // grounding
+    out.push({
+      company: String(d.company),
+      counterparty: d.counterparty ? String(d.counterparty) : null,
+      companyRole: VALID_ROLES.includes(d.companyRole) ? d.companyRole : 'party',
+      counterpartyRole: VALID_ROLES.includes(d.counterpartyRole) ? d.counterpartyRole : 'party',
+      dealType: VALID_TYPES.includes(d.dealType) ? d.dealType : 'other',
+      value: d.value ? String(d.value) : null,
+      date: d.date ? String(d.date) : null,
+      evidence: ev.slice(0, 200),
+    });
+  }
+  return out;
+}
+
+export async function collectTradePressDeals(topicTerms: string[], opts: { timespan?: string; max?: number } = {}): Promise<NewsDeal[]> {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) return [];
+  const client = new Anthropic({ apiKey: key });
+  const domains = TRADE_DOMAINS.map(d => `domainis:${d}`).join(' OR ');
+  const topic = topicTerms.filter(Boolean).map(t => `"${t}"`).join(' OR ');
+  const deal = '(acquisition OR acquires OR licensing OR collaboration OR partnership OR merger)';
+  const q = `(${domains}) (${topic}) ${deal}`;
+  const u = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=${opts.max ?? 25}&format=json&sort=datedesc&timespan=${opts.timespan ?? '12m'}`;
+  const arts = articles(await gdeltGet(u));
+  if (!arts.length) return [];
+  const text = arts.map(a => `${a.date}: ${a.title} — ${a.domain} <${a.url}>`).join('\n');
+  const found: NewsDeal[] = [];
+  for (const d of await extractHeadlines(text, topicTerms[0] ?? 'biotech', client)) {
+    const a = arts.find(x => x.title && d.evidence.toLowerCase().includes(x.title.toLowerCase().slice(0, 30))) ?? arts.find(x => x.title.toLowerCase().includes(d.evidence.toLowerCase().slice(0, 30)));
+    const year = (d.date ?? '').slice(0, 4);
+    found.push({
+      ...d,
+      id: `deal:${slug(d.company)}:${partyKey(d.counterparty)}|${d.dealType}|${year}`,
+      source: 'Trade press' + (a ? ': ' + a.domain : ''),
+      url: a?.url ?? 'https://www.gdeltproject.org',
+      confidence: d.value ? 0.6 : 0.5,
+    });
+  }
+  return found;
 }
