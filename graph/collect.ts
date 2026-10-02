@@ -11,6 +11,7 @@ import { collectCompetitors, classifyProgram, ProgramRecord } from './connectors
 import { collectAcademics, KolRecord } from './connectors/academics.js';
 import { collectFinancings, collectDeals, FinancingRecord, DealRecord } from './connectors/financings.js';
 import { collectNewsDeals, collectTradePressDeals, NewsDeal } from './connectors/newsdeals.js';
+import { runAlerts, ProgramInfo, DealInfo, FinancingInfo } from './alerts.js';
 
 const prov = (source: string, url: string, trustTier = 'structured') => ({ source, url, retrievedAt: new Date().toISOString(), trustTier });
 const CT = (nct: string) => `https://clinicaltrials.gov/study/${nct}`;
@@ -98,15 +99,23 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     await g.upsertVertex('DealflowCompany', dfId, pk, { name: c.name, modality: seed.modality, seedDisease: pk, ...prov('Dealflow', 'internal') });
     await g.upsertEdge('develops_for', dfId, pk, prov('Dealflow', 'internal'));
 
+    // Current-state accumulators for Phase 4 change detection.
+    const curPrograms: Record<string, ProgramInfo> = {};
+    const curDeals: Record<string, DealInfo> = {};
+    const curFinancings: Record<string, FinancingInfo> = {};
+    const curCompanies: Record<string, string> = {};
+    const curKols: Record<string, string> = {};
+
     const programs = await staging.get<ProgramRecord>('clinicaltrials.gov', { slice: pk, recordType: 'trial' });
     const companies = new Set<string>();
     for (const p of programs) {
       const co = resolveCompany(p.sponsor);
       if (!co.canonicalId) continue;
-      const coId = co.canonicalId; companies.add(coId);
+      const coId = co.canonicalId; companies.add(coId); curCompanies[coId] = p.sponsor;
       const phase = (p.phase ?? []).join('/') || 'NA';
       const progId = `program:${coId.replace('company:', '')}:${p.nct}`;
       const cls = classifyProgram(p); // deterministic; robust to older staged records
+      curPrograms[progId] = { name: firstIntervention(p.interventions) || p.title.slice(0, 120), company: p.sponsor, stage: phase, status: p.discontinued ? 'discontinued' : 'active', url: CT(p.nct) };
       await g.upsertVertex('Company', coId, pk, { name: p.sponsor, ...prov('ClinicalTrials.gov', 'https://clinicaltrials.gov') });
       await g.upsertEdge('competes_with', dfId, coId, prov('Dealflow', 'internal', 'inferred'));
       await g.upsertVertex('Program', progId, pk, { name: firstIntervention(p.interventions) || p.title.slice(0, 120), modality: cls.modality, isCellTherapy: cls.isCellTherapy, developmentStage: phase, status: p.discontinued ? 'discontinued' : 'active', ...prov('ClinicalTrials.gov', CT(p.nct)) });
@@ -125,6 +134,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     const kols = await staging.get<KolRecord>('openalex', { slice: pk, recordType: 'author' });
     for (const k of kols) {
       const pid = k.orcid ? `ORCID:${k.orcid}` : `OPENALEX:${k.openAlexId}`;
+      curKols[pid] = k.name;
       await g.upsertVertex('Person', pid, pk, { name: k.name, orcid: k.orcid ?? undefined, openAlexId: k.openAlexId, country: k.country ?? undefined, recentWorks: k.recentWorks, leadWorks: k.leadWorks, ...prov('OpenAlex', 'https://openalex.org/' + k.openAlexId) });
       await g.upsertEdge('researches', pid, pk, prov('OpenAlex', 'https://openalex.org', 'inferred'));
       if (k.institution) {
@@ -142,6 +152,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       await g.upsertVertex('Company', co.canonicalId, pk, { name: f.company, ...prov('SEC EDGAR', f.url) });
       await g.upsertVertex('Financing', f.id, pk, { roundType: f.roundType, amountRaised: f.amountUsd ?? undefined, currency: f.amountUsd ? 'USD' : undefined, date: f.date, ...prov('SEC EDGAR', f.url) });
       await g.upsertEdge('raised', co.canonicalId, f.id, prov('SEC EDGAR', f.url));
+      curFinancings[f.id] = { company: f.company, amount: f.amountUsd ?? null, url: f.url };
     }
     const deals = await staging.get<DealRecord>('sec.gov', { slice: pk, recordType: 'deal' });
     for (const d of deals) {
@@ -149,6 +160,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       await g.upsertVertex('Company', co.canonicalId, pk, { name: d.company, ...prov('SEC EDGAR', d.url) });
       await g.upsertVertex('Deal', d.id, pk, { dealType: d.dealType, date: d.date, ...prov('SEC EDGAR', d.url, 'inferred') });
       await g.upsertEdge('party_to', co.canonicalId, d.id, prov('SEC EDGAR', d.url, 'inferred'));
+      curDeals[d.id] = { company: d.company, counterparty: null, type: d.dealType, value: null, url: d.url };
     }
     summary.financings = fins.length;
     summary.deals = deals.length;
@@ -160,6 +172,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       await g.upsertVertex('Company', co.canonicalId, pk, { name: d.company, ...prov(d.source, d.url, 'inferred') });
       await g.upsertVertex('Deal', d.id, pk, { dealType: d.dealType, value: d.value ?? undefined, date: d.date ?? undefined, counterparty: d.counterparty ?? undefined, evidence: d.evidence, confidence: d.confidence, role: d.companyRole, ...prov(d.source, d.url, 'inferred') });
       await g.upsertEdge('party_to', co.canonicalId, d.id, { role: d.companyRole, ...prov(d.source, d.url, 'inferred') });
+      curDeals[d.id] = { company: d.company, counterparty: d.counterparty, type: d.dealType, value: d.value, url: d.url };
       // Record the buyer/partner as its own Company node + counterparty edge, when
       // it is a single, resolvable entity (skip compound "X and Y" counterparties).
       if (d.counterparty && !/\band\b|,|;|\//.test(d.counterparty)) {
@@ -185,6 +198,11 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
     summary.acquirers = await one("g.V().hasLabel('Deal').has('pk',pk).out('deal_counterparty').dedup().values('name').fold()");
     // competitors with any observed financing (backward traversal: Financing←raised←Company)
     summary.funded_competitors = await one("g.V().hasLabel('Financing').has('pk',pk).in('raised').dedup().count()");
+
+    // ── Phase 4: detect changes vs the previous run, alert owners ──
+    const alertRes = await runAlerts(pool, { slice: pk, companyId, company: c.name, cur: { programs: curPrograms, deals: curDeals, financings: curFinancings, companies: curCompanies, kols: curKols } });
+    summary.alerts = alertRes.alerts;
+    summary.alert_dispatch = alertRes.dispatch;
     return summary;
   } finally {
     await g.close();
