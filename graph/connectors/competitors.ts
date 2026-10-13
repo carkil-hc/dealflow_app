@@ -9,7 +9,7 @@ import { getJson } from '../http.js';
 // So the signal is the ClinicalTrials.gov InterventionType (Biological/Genetic)
 // combined with cell/regenerative terms, and negative filters that reject
 // small-molecule standard-of-care and device/neuromodulation trials.
-const CELL   = /\bcell\b|stem|ipsc|hipsc|pluripotent|embryonic|\besc\b|progenitor|precursor|dopaminergic (neuron|progenitor|cell)|midbrain dopamine|neuron|transplant|implant|graft|bemdaneprocel|da01|dap001|a9-dpc|ncr201|stem-pd|mesencephalic/i;
+const CELL   = /\bcell\b|\bstem\b|ipsc|hipsc|pluripotent|embryonic|\besc\b|progenitor|precursor|dopaminergic (neuron|progenitor|cell)|midbrain dopamine|\bneuron\b|transplant|\bimplant|\bgraft|bemdaneprocel|da01|dap001|a9-dpc|ncr201|stem-pd|mesencephalic/i;
 const MSC    = /mesenchymal|\bmsc\b|adipose|\bsvf\b|bone marrow|umbilical|wharton/i;
 const GENE   = /\bgene therapy\b|\baav\b|lentivir|\bvector\b|gene transfer/i;
 const DRUG   = /levodopa|carbidopa|madopar|apomorphine|rasagiline|cabergoline|pimavanserin|entacapone|lecig|amantadine|opicapone|safinamide|ropinirole|pramipexole|rotigotine|agonist|monotherapy|placebo|tablet|capsule|\bgel\b|\bdrug:/i;
