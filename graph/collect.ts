@@ -47,7 +47,10 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
 
     // ── fetch + stage (unless reprocessing) ──
     if (!opts.reprocess) {
-      const programs = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 45 });
+      const comp = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 45, seed: { target: seed.target, mechanism: seed.mechanism, modality: seed.modality } });
+      const programs = [...comp.competitors, ...comp.approved]; // both get nodes; approved tagged + shown separately
+      summary.academic_dropped = comp.academicCount;
+      summary.approved_drugs = comp.approved.length;
       const kols = await collectAcademics(seed.diseaseName, { cellTherapy, top: 12 });
       const recs: RawRecord[] = [
         ...programs.map(p => ({ source: 'clinicaltrials.gov', id: p.nct, recordType: 'trial', slice: pk, url: CT(p.nct), payload: p })),
@@ -96,7 +99,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
 
     // ── load graph from staging ──
     await g.upsertVertex('Disease', pk, pk, { name: dis.label ?? seed.diseaseName, mondo: pk, ...prov('OpenTargets', 'https://platform.opentargets.org') });
-    await g.upsertVertex('DealflowCompany', dfId, pk, { name: c.name, modality: seed.modality, seedDisease: pk, ...prov('Dealflow', 'internal') });
+    await g.upsertVertex('DealflowCompany', dfId, pk, { name: c.name, modality: seed.modality, seedDisease: pk, seedTarget: seed.target ?? undefined, seedMechanism: seed.mechanism ?? undefined, maxStage: seed.maxStage ?? undefined, ...prov('Dealflow', 'internal') });
     await g.upsertEdge('develops_for', dfId, pk, prov('Dealflow', 'internal'));
 
     // Current-state accumulators for Phase 4 change detection.
@@ -116,9 +119,10 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       const progId = `program:${coId.replace('company:', '')}:${p.nct}`;
       const cls = classifyProgram(p); // deterministic; robust to older staged records
       curPrograms[progId] = { name: firstIntervention(p.interventions) || p.title.slice(0, 120), company: p.sponsor, stage: phase, status: p.discontinued ? 'discontinued' : 'active', url: CT(p.nct) };
+      const approved = (p as ProgramRecord).approved === true;
       await g.upsertVertex('Company', coId, pk, { name: p.sponsor, ...prov('ClinicalTrials.gov', 'https://clinicaltrials.gov') });
       await g.upsertEdge('competes_with', dfId, coId, prov('Dealflow', 'internal', 'inferred'));
-      await g.upsertVertex('Program', progId, pk, { name: firstIntervention(p.interventions) || p.title.slice(0, 120), modality: cls.modality, isCellTherapy: cls.isCellTherapy, developmentStage: phase, status: p.discontinued ? 'discontinued' : 'active', ...prov('ClinicalTrials.gov', CT(p.nct)) });
+      await g.upsertVertex('Program', progId, pk, { name: firstIntervention(p.interventions) || p.title.slice(0, 120), modality: cls.modality, isCellTherapy: cls.isCellTherapy, developmentStage: phase, status: p.discontinued ? 'discontinued' : 'active', approved, sponsorClass: (p as ProgramRecord).sponsorClass, ...prov('ClinicalTrials.gov', CT(p.nct)) });
       await g.upsertEdge('develops', coId, progId, prov('ClinicalTrials.gov', CT(p.nct)));
       const modId = modSlug(cls.modality);
       await g.upsertVertex('Modality', modId, pk, { name: cls.modality, ...prov('ClinicalTrials.gov', CT(p.nct), 'inferred') });

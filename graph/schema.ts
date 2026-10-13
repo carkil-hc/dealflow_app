@@ -15,7 +15,7 @@
 // co-locate, so within-slice traversals are single-partition. Reference nodes shared
 // across slices are written once per slice they appear in. Revisit at multi-slice scale.
 
-export const SCHEMA_VERSION = 4; // v4: Program gains modality/isCellTherapy; Deal gains counterparty/value/evidence/confidence/role (news+EDGAR deals)
+export const SCHEMA_VERSION = 5; // v5: Program gains approved/sponsorClass; DealflowCompany gains seedMechanism/maxStage (relevance-chain seed)
 
 export const GRAPH = {
   account: 'hc-dealflow-graph',
@@ -40,9 +40,9 @@ export const PROVENANCE_PROPS = ['source', 'url', 'retrievedAt', 'trustTier'] as
 export interface VertexDef { canonicalId: string; required: string[]; optional: string[]; }
 
 export const VERTICES: Record<string, VertexDef> = {
-  DealflowCompany: { canonicalId: 'dealflow company id', required: ['name'], optional: ['modality', 'seedDisease', 'seedTarget'] },
+  DealflowCompany: { canonicalId: 'dealflow company id', required: ['name'], optional: ['modality', 'seedDisease', 'seedTarget', 'seedMechanism', 'maxStage'] },
   Company:         { canonicalId: 'normalised company key (LEI when known)', required: ['name'], optional: ['aliases', 'country'] },
-  Program:         { canonicalId: 'ChEMBL / DrugBank / UNII, else sponsor+name key', required: ['name'], optional: ['modality', 'isCellTherapy', 'mechanismOfAction', 'developmentStage', 'status', 'clinicalDataSummary'] },
+  Program:         { canonicalId: 'ChEMBL / DrugBank / UNII, else sponsor+name key', required: ['name'], optional: ['modality', 'isCellTherapy', 'mechanismOfAction', 'developmentStage', 'status', 'approved', 'sponsorClass', 'clinicalDataSummary'] },
   Target:          { canonicalId: 'HGNC / UniProt / ChEMBL', required: ['symbol'], optional: ['name'] },
   Disease:         { canonicalId: 'MONDO / EFO', required: ['name'], optional: ['mesh', 'efo', 'mondo'] },
   Modality:        { canonicalId: 'controlled-vocabulary slug', required: ['name'], optional: [] },

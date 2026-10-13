@@ -46,11 +46,16 @@ export interface ProgramRecord {
   phase: string[];
   status: string;
   sponsor: string;
+  sponsorClass: string;    // INDUSTRY | OTHER | NIH | FED | NETWORK | INDIV | UNKNOWN
   interventions: string;
   discontinued: boolean;
   modality: string;        // classified: iPSC-derived cell therapy | small molecule / SoC | ...
   isCellTherapy: boolean;  // regenerative cell/gene therapy vs. drug/device/other
+  approved: boolean;       // marketed/approved proxy (Phase 4) — split out from novel pipeline
 }
+
+// Seed anchors drive the relevance chain: disease > target > mechanism > modality.
+export interface SeedContext { target?: string | null; mechanism?: string | null; modality?: string | null; }
 
 async function ctgov(condition: string, intr: string): Promise<ProgramRecord[]> {
   const out: ProgramRecord[] = [];
@@ -60,19 +65,22 @@ async function ctgov(condition: string, intr: string): Promise<ProgramRecord[]> 
       + '?query.cond=' + encodeURIComponent(condition)
       + '&query.intr=' + encodeURIComponent(intr)
       + '&pageSize=200' + (token ? '&pageToken=' + token : '')
-      + '&fields=' + encodeURIComponent('NCTId,BriefTitle,Phase,OverallStatus,LeadSponsorName,InterventionName,InterventionType');
+      + '&fields=' + encodeURIComponent('NCTId,BriefTitle,Phase,OverallStatus,LeadSponsorName,LeadSponsorClass,InterventionName,InterventionType');
     const data = await getJson(url);
     for (const s of (data.studies ?? [])) {
       const p = s.protocolSection ?? {};
       const status = p.statusModule?.overallStatus ?? '';
+      const phase = p.designModule?.phases ?? [];
       const rec = {
         nct: p.identificationModule?.nctId,
         title: p.identificationModule?.briefTitle ?? '',
-        phase: p.designModule?.phases ?? [],
+        phase,
         status,
         sponsor: p.sponsorCollaboratorsModule?.leadSponsor?.name ?? '',
+        sponsorClass: p.sponsorCollaboratorsModule?.leadSponsor?.class ?? 'UNKNOWN',
         interventions: (p.armsInterventionsModule?.interventions ?? []).map((i: any) => `${i.type}:${i.name}`).join(' | '),
         discontinued: /TERMINATED|WITHDRAWN|SUSPENDED/i.test(status),
+        approved: (phase as string[]).includes('PHASE4'),
       };
       out.push({ ...rec, ...classifyProgram(rec) });
     }
@@ -94,24 +102,63 @@ const MOD_WEIGHT: Record<string, number> = {
 const PHASE_RANK: Record<string, number> = {
   PHASE3: 5, 'PHASE2/PHASE3': 4.5, PHASE2: 4, 'PHASE1/PHASE2': 3.5, PHASE1: 3, EARLY_PHASE1: 2, NA: 1,
 };
-const relevance = (p: ProgramRecord) =>
+// Cell-seed ranking (unchanged): engineered-cell + later-phase first.
+const cellRelevance = (p: ProgramRecord) =>
   (MOD_WEIGHT[p.modality] ?? 2) * 10 + (PHASE_RANK[(p.phase ?? []).join('/')] ?? 1) + (p.discontinued ? -0.5 : 0);
 
-export async function collectCompetitors(condition: string, opts: { cellTherapy?: boolean; cap?: number } = {}): Promise<ProgramRecord[]> {
-  const cap = opts.cap ?? 40;
-  // Specific intervention terms first so the engineered-cell programs are seen
-  // before the broad "stem cell" term pulls in the MSC/adipose clinics.
-  // Specific terms first (seen before the cap), then broad terms for recall; the
-  // isCellTherapy filter drops drugs/devices and the relevance sort keeps the cap
-  // full of the most relevant programs regardless of which query surfaced them.
+// Distinctive tokens from a target/mechanism string, dropping generic pharmacology words.
+const STOP = new Set(['receptor', 'agonist', 'antagonist', 'inhibitor', 'modulator', 'partial', 'selective', 'therapy', 'disease', 'the', 'and', 'for']);
+const tokens = (s: string | null | undefined) =>
+  (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(/\s+/).filter(t => t.length > 2 && !STOP.has(t));
+
+// Seed-aware relevance chain: disease is implicit (we query by it); differentiate
+// by target > mechanism > modality, then phase, preferring industry developers.
+function chainRelevance(p: ProgramRecord, seed: SeedContext): number {
+  const text = `${p.title} ${p.interventions}`.toLowerCase();
+  let s = PHASE_RANK[(p.phase ?? []).join('/')] ?? 1;
+  if (tokens(seed.target).some(t => text.includes(t))) s += 6;        // same target
+  if (tokens(seed.mechanism).some(t => text.includes(t))) s += 4;     // same mechanism/MoA
+  if (seed.modality && modalityAligns(p, seed.modality)) s += 1;      // same modality (weakest)
+  if (p.sponsorClass === 'INDUSTRY') s += 2;
+  if (p.discontinued) s -= 0.5;
+  return s;
+}
+function modalityAligns(p: ProgramRecord, seedModality: string): boolean {
+  if (/cell/.test(seedModality)) return p.isCellTherapy;
+  if (/gene/.test(seedModality)) return p.modality === 'gene therapy';
+  if (/small molecule/.test(seedModality)) return p.modality === 'small molecule / SoC';
+  return false;
+}
+
+export interface CollectResult { competitors: ProgramRecord[]; approved: ProgramRecord[]; academicCount: number; }
+
+export async function collectCompetitors(condition: string, opts: { cellTherapy?: boolean; cap?: number; seed?: SeedContext } = {}): Promise<CollectResult> {
+  const cap = opts.cap ?? 45;
+  const seed = opts.seed ?? {};
+  // Cell seeds: specific intervention terms first, then broad, for recall.
+  // Other seeds: disease-wide query plus the seed's own target/mechanism terms so
+  // mechanism peers (any modality) surface even if their trials don't name the disease.
   const queries = opts.cellTherapy
     ? ['dopaminergic progenitor', 'iPSC', 'pluripotent', 'dopaminergic neuron', 'dopaminergic', 'progenitor cell', 'neural stem cell', 'neuron', 'cell transplantation', 'stem cell']
-    : ['']; // empty intervention term = all interventions for the condition
+    : ['', seed.target ?? '', seed.mechanism ?? ''].filter((q, i, a) => a.indexOf(q) === i);
   const byNct = new Map<string, ProgramRecord>();
   for (const q of queries) for (const p of await ctgov(condition, q)) if (p.nct && !byNct.has(p.nct)) byNct.set(p.nct, p);
-  let list = [...byNct.values()];
-  // For a cell-therapy company, competitors = cell/regenerative programs only;
-  // drug and device standard-of-care trials that share the disease are dropped.
-  if (opts.cellTherapy) list = list.filter(p => p.isCellTherapy);
-  return list.sort((a, b) => relevance(b) - relevance(a)).slice(0, cap);
+  const all = [...byNct.values()];
+
+  if (opts.cellTherapy) {
+    const cells = all.filter(p => p.isCellTherapy);
+    const list = cells.sort((a, b) => cellRelevance(b) - cellRelevance(a));
+    return { competitors: list.filter(p => !p.approved).slice(0, cap), approved: list.filter(p => p.approved), academicCount: 0 };
+  }
+
+  // Non-cell: competitors = INDUSTRY-sponsored developers only (drop academic /
+  // government / hospital trials, which are context/KOL signal, not companies).
+  const industry = all.filter(p => p.sponsorClass === 'INDUSTRY');
+  const academicCount = all.length - industry.length;
+  const ranked = industry.sort((a, b) => chainRelevance(b, seed) - chainRelevance(a, seed));
+  return {
+    competitors: ranked.filter(p => !p.approved).slice(0, cap),  // novel pipeline
+    approved: ranked.filter(p => p.approved),                    // marketed / Phase 4, separate list
+    academicCount,
+  };
 }
