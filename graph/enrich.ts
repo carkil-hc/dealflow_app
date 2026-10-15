@@ -10,7 +10,7 @@ import { resolveCompany } from './resolvers.js';
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const E = JSON.parse(fs.readFileSync(process.argv[2], 'utf-8'));
 const pk: string = E.slice, dfId: string = E.seedDfId, SRC: string = E.source || 'BioCentury', URL: string = E.url || 'https://www.biocentury.com';
-const prov = (tier = 'inferred') => ({ source: SRC, url: URL, retrievedAt: new Date().toISOString(), trustTier: tier });
+const prov = (src = SRC, url = URL, tier = 'inferred') => ({ source: src, url, retrievedAt: new Date().toISOString(), trustTier: tier });
 
 const g = openGraph();
 try {
@@ -49,5 +49,25 @@ try {
     await g.upsertVertex('Financing', id, pk, { roundType: f.roundType, amountRaised: f.amountUsd ?? undefined, currency: f.amountUsd ? 'USD' : undefined, date: f.date ?? undefined, ...prov() });
     await g.upsertEdge('raised', co.canonicalId, id, prov());
   }
-  console.log(JSON.stringify({ programs: (E.programs ?? []).length, deals: (E.deals ?? []).length, financings: (E.financings ?? []).length }));
+  // Publications (PubMed): Publication nodes + about(Disease) / about_target(Target)
+  // / authored(Person) edges. Author→KOL match is done in JS against the slice's
+  // existing Person nodes (Cosmos Gremlin lacks reliable text predicates).
+  const pubs = E.publications ?? [];
+  if (pubs.length) {
+    const persons: { id: string; name: string }[] = await g.run("g.V().hasLabel('Person').has('pk',pk).project('id','name').by(id).by('name')", { pk });
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
+    for (const pub of pubs) {
+      const pid = 'pub:' + slug(pub.doi || pub.pmid); // Cosmos ids cannot contain '/'
+      const purl = pub.doi ? 'https://doi.org/' + pub.doi : 'https://pubmed.ncbi.nlm.nih.gov/' + pub.pmid;
+      await g.upsertVertex('Publication', pid, pk, { title: pub.title, doi: pub.doi ?? undefined, year: pub.year ?? undefined, venue: pub.venue ?? undefined, findingsSummary: pub.findings ?? undefined, ...prov('PubMed', purl, 'structured') });
+      await g.upsertEdge('about', pid, pk, prov('PubMed', purl, 'structured'));
+      if (targetId) await g.upsertEdge('about_target', pid, targetId, prov('PubMed', purl, 'structured'));
+      for (const an of (pub.kolAuthors ?? [])) {
+        const want = norm(an); // match if all author tokens appear in a Person's name
+        const hit = persons.find(p => { const nm = norm(p.name); return want.every(t => nm.includes(t)); });
+        if (hit) await g.upsertEdge('authored', hit.id, pid, prov('PubMed', purl, 'structured'));
+      }
+    }
+  }
+  console.log(JSON.stringify({ programs: (E.programs ?? []).length, deals: (E.deals ?? []).length, financings: (E.financings ?? []).length, publications: pubs.length }));
 } finally { await g.close(); }
