@@ -19,6 +19,7 @@
     "docx": "^9.7.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "gremlin": "^3.8.2",
     "idb": "^8.0.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.424.0",
