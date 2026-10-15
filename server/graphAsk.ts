@@ -95,7 +95,45 @@ export async function askGraph(question: string, opts: { maxSteps?: number } = {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function run(g: any, q: string, b: Record<string, unknown> = {}): Promise<any[]> {
+  const rs = await g.submit(q, b);
+  return rs.toArray();
+}
+
+// Structured slice data for a dealflow company, for inline display in the app.
+export async function getIntelligence(companyId: string): Promise<Record<string, unknown>> {
+  const dfId = 'dealflow:' + companyId;
+  const g = openGraph();
+  try {
+    const df = await run(g, "g.V(dfId).project('name','pk','modality','target','mechanism','maxStage').by(values('name')).by(values('seedDisease')).by(__.coalesce(__.values('modality'),__.constant('-'))).by(__.coalesce(__.values('seedTarget'),__.constant('-'))).by(__.coalesce(__.values('seedMechanism'),__.constant('-'))).by(__.coalesce(__.values('maxStage'),__.constant('-')))", { dfId });
+    if (!df.length) return { collected: false };
+    const pk = df[0].pk as string;
+    const q = (s: string) => run(g, s, { pk });
+    const [programs, deals, financings, kols, publications] = await Promise.all([
+      q("g.V().hasLabel('Program').has('pk',pk).project('company','program','stage','status','modality','approved','src','moa').by(__.in('develops').values('name').fold()).by('name').by('developmentStage').by('status').by(__.coalesce(__.values('modality'),__.constant('-'))).by(__.coalesce(__.values('approved'),__.constant(false))).by(__.coalesce(__.values('source'),__.constant('-'))).by(__.coalesce(__.values('mechanismOfAction'),__.constant('-')))"),
+      q("g.V().hasLabel('Deal').has('pk',pk).project('company','type','value','date','counterparty','src').by(__.in('party_to').values('name').fold()).by('dealType').by(__.coalesce(__.values('value'),__.constant('-'))).by(__.coalesce(__.values('date'),__.constant('-'))).by(__.coalesce(__.values('counterparty'),__.constant('-'))).by(__.coalesce(__.values('source'),__.constant('-')))"),
+      q("g.V().hasLabel('Financing').has('pk',pk).project('company','round','amount','date').by(__.in('raised').values('name').fold()).by('roundType').by(__.coalesce(__.values('amountRaised'),__.constant(0))).by(__.coalesce(__.values('date'),__.constant('-')))"),
+      q("g.V().hasLabel('Person').has('pk',pk).project('name','country','lead','total','inst').by('name').by(__.coalesce(__.values('country'),__.constant('-'))).by(__.coalesce(__.values('leadWorks'),__.constant(0))).by(__.coalesce(__.values('recentWorks'),__.constant(0))).by(__.coalesce(__.out('affiliated_with').values('name'),__.constant('-')).fold())"),
+      q("g.V().hasLabel('Publication').has('pk',pk).project('title','venue','year','findings','doi','kol').by('title').by(__.coalesce(__.values('venue'),__.constant('-'))).by(__.coalesce(__.values('year'),__.constant(0))).by(__.coalesce(__.values('findingsSummary'),__.constant('-'))).by(__.coalesce(__.values('doi'),__.constant('-'))).by(__.in('authored').values('name').fold())"),
+    ]);
+    return { collected: true, seed: df[0], programs, deals, financings, kols, publications };
+  } finally {
+    await g.close();
+  }
+}
+
 export const graphAskRouter = Router();
+
+// GET /api/companies/:id/intelligence — structured slice data for the Intelligence tab.
+graphAskRouter.get('/api/companies/:id/intelligence', async (req, res) => {
+  try {
+    res.json(await getIntelligence(req.params.id));
+  } catch (err) {
+    console.error('[graph/intelligence]', err);
+    res.status(500).json({ error: 'intelligence fetch failed', detail: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 // POST /api/graph/ask { question } → { answer, trace }
 graphAskRouter.post('/api/graph/ask', async (req, res) => {

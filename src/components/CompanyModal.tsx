@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   X, ArrowRight, XCircle, RotateCcw, Trash2, Save, ChevronRight,
   Building2, Briefcase, MessageSquare, Paperclip, History, FlaskConical,
-  LayoutDashboard, ClipboardCheck, Loader2, Download, FileSignature,
+  LayoutDashboard, ClipboardCheck, Loader2, Download, FileSignature, Network,
 } from 'lucide-react';
 import {
   Company, Stage, STAGE_CONFIG, PIPELINE_STAGES, NEXT_STAGE,
@@ -19,6 +19,7 @@ import DealTab from './companyModal/DealTab';
 import DueDiligenceTab from './companyModal/DueDiligenceTab';
 import DDReportsTab from './companyModal/DDReportsTab';
 import InvestmentDocsTab from './companyModal/InvestmentDocsTab';
+import IntelligenceTab from './companyModal/IntelligenceTab';
 
 interface Props {
   company: Company | null;
@@ -32,7 +33,7 @@ interface Props {
   attachmentsLoaded: boolean;
 }
 
-type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports' | 'investment_docs';
+type Tab = 'overview' | 'info' | 'deal' | 'due_diligence' | 'notes' | 'files' | 'history' | 'dd_reports' | 'investment_docs' | 'intelligence';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview',      label: 'Overview',       icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
@@ -44,6 +45,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'history',         label: 'History',        icon: <History className="w-3.5 h-3.5" /> },
   { id: 'dd_reports',      label: 'DD Reports',     icon: <FlaskConical className="w-3.5 h-3.5" /> },
   { id: 'investment_docs', label: 'Investment Docs', icon: <FileSignature className="w-3.5 h-3.5" /> },
+  { id: 'intelligence',    label: 'Intelligence',    icon: <Network className="w-3.5 h-3.5" /> },
 ];
 
 function newCompany(owner?: string): Company {
@@ -352,6 +354,8 @@ export default function CompanyModal({ company, currentUser, onSave, onAutoSave,
                 currentUser={currentUser}
               />
             )}
+
+            {tab === 'intelligence' && <IntelligenceTab company={form} />}
           </div>
         </div>
 
