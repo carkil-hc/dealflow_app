@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Network, RefreshCw, ExternalLink, FlaskConical, Handshake, Banknote, GraduationCap, BookOpen } from 'lucide-react';
+import { Loader2, Sparkles, Network, RefreshCw, ExternalLink, FlaskConical, Handshake, GraduationCap, BookOpen, Users } from 'lucide-react';
 import { Company } from '../../types';
 
 // The Intelligence tab: the company's competitive graph slice shown inline
-// (mechanism peers, clinical pipeline, deals, financings, KOLs, publications),
-// plus an "ask the graph" box that reasons live over the whole knowledge graph.
+// (competitors, mechanism peers, deals, financings, KOLs, publications), plus an
+// "ask the graph" box that reasons live over the whole knowledge graph.
 
 interface Row { [k: string]: unknown }
 interface Intel {
@@ -13,6 +13,7 @@ interface Intel {
   programs?: Row[]; deals?: Row[]; financings?: Row[]; kols?: Row[]; publications?: Row[];
 }
 const first = (v: unknown): string => (Array.isArray(v) && v.length ? String(v[0]) : (v == null || v === '-' ? '' : String(v)));
+const src = (p: Row): string => first(p.src);
 const PH: Record<string, { l: string; late: boolean }> = {
   PRECLINICAL: { l: 'Preclinical', late: false }, EARLY_PHASE1: { l: 'Early Ph1', late: false },
   PHASE1: { l: 'Phase 1', late: false }, 'PHASE1/PHASE2': { l: 'Phase 1/2', late: false },
@@ -20,6 +21,7 @@ const PH: Record<string, { l: string; late: boolean }> = {
   PHASE3: { l: 'Phase 3', late: true }, PHASE4: { l: 'Phase 4', late: true }, NA: { l: 'n/a', late: false },
 };
 const ph = (s: string) => PH[s] ?? { l: s || 'n/a', late: false };
+const pr = (s: string) => { const m: Record<string, number> = { PHASE3: 4, 'PHASE2/PHASE3': 3.5, PHASE2: 3, 'PHASE1/PHASE2': 2.5, PHASE1: 2, EARLY_PHASE1: 1.5, PRECLINICAL: 1, NA: 0 }; return m[s] ?? 0; };
 const money = (n: number) => !n ? '—' : '$' + (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(0) + 'M' : n.toLocaleString());
 
 const SectionHead = ({ icon, title, count }: { icon: React.ReactNode; title: string; count?: number | string }) => (
@@ -39,6 +41,7 @@ export default function IntelligenceTab({ company }: { company: Company }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [queuing, setQueuing] = useState(false);
+  const [collectMsg, setCollectMsg] = useState('');
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState('');
   const [asking, setAsking] = useState('');
@@ -53,11 +56,16 @@ export default function IntelligenceTab({ company }: { company: Company }) {
     } catch { setError('Could not load intelligence data.'); } finally { setLoading(false); }
   }, [company.id]);
 
-  useEffect(() => { setData(null); setAnswer(''); setQ(''); load(); }, [load]);
+  useEffect(() => { setData(null); setAnswer(''); setQ(''); setCollectMsg(''); load(); }, [load]);
 
   const runCollection = async () => {
-    setQueuing(true);
-    try { await fetch(`/api/companies/${company.id}/collect`, { method: 'POST' }); } finally { setQueuing(false); }
+    if (!company.id) return;
+    setQueuing(true); setCollectMsg('');
+    try {
+      const res = await fetch(`/api/companies/${company.id}/collect`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      setCollectMsg('Collection queued — it runs on the next worker cycle (up to ~30 min). Refresh this tab afterwards.');
+    } catch { setCollectMsg('Could not queue collection — please try again.'); } finally { setQueuing(false); }
   };
 
   const ask = async (question: string) => {
@@ -72,6 +80,13 @@ export default function IntelligenceTab({ company }: { company: Company }) {
     } catch { setAnswer('Ask failed — please try again.'); } finally { setAsking(''); }
   };
 
+  const CollectBtn = ({ label }: { label: string }) => (
+    <button onClick={runCollection} disabled={queuing || !company.id}
+      className="inline-flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-3 py-1.5 rounded-sm transition-colors">
+      {queuing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Queuing…</> : <><RefreshCw className="w-3.5 h-3.5" /> {label}</>}
+    </button>
+  );
+
   if (loading) return <div className="flex items-center gap-2 text-gray-400 text-sm py-10 justify-center"><Loader2 className="w-4 h-4 animate-spin" /> Loading intelligence…</div>;
   if (error) return <div className="text-sm text-gray-500 py-6">{error} <button onClick={load} className="text-hc-teal underline ml-1">retry</button></div>;
 
@@ -80,24 +95,25 @@ export default function IntelligenceTab({ company }: { company: Company }) {
       <div className="max-w-xl mx-auto text-center py-12">
         <Network className="w-8 h-8 text-gray-300 mx-auto mb-3" />
         <h3 className="font-semibold text-[#1A1A1A] mb-1">No intelligence collected yet</h3>
-        <p className="text-sm text-gray-500 mb-5">Run collection to build this company's competitive landscape — competitors, deals, financings, KOLs and clinical evidence — into the knowledge graph.</p>
-        <button onClick={runCollection} disabled={queuing || !company.id}
-          className="inline-flex items-center gap-1.5 bg-hc-teal hover:bg-hc-teal-700 disabled:bg-gray-200 text-white text-sm font-medium px-4 py-2 rounded-sm transition-colors">
-          {queuing ? <><Loader2 className="w-4 h-4 animate-spin" /> Queuing…</> : <><RefreshCw className="w-4 h-4" /> Run collection</>}
-        </button>
-        {queuing === false && <p className="text-[11px] text-gray-400 mt-3">Collection runs in the background (scheduled worker). Re-open this tab in a few minutes.</p>}
+        <p className="text-sm text-gray-500 mb-5">Collect this company's competitive landscape — competitors, deals, financings, KOLs and clinical evidence — into the knowledge graph.</p>
+        <CollectBtn label="Collect intelligence" />
+        {collectMsg
+          ? <p className="text-[12px] text-hc-teal mt-3">{collectMsg}</p>
+          : <p className="text-[11px] text-gray-400 mt-3">Collection runs in the background (scheduled worker).</p>}
       </div>
     );
   }
   if (!data) return null;
 
   const programs = (data.programs ?? []) as Row[];
-  const peers = programs.filter(p => ['BioCentury', 'PubMed'].includes(first(p.src)));
-  const pipeline = programs.filter(p => first(p.src) === 'ClinicalTrials.gov' && p.approved !== true);
+  const peers = programs.filter(p => ['BioCentury', 'PubMed'].includes(src(p)) && p.approved !== true)
+    .sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
+  const competitors = programs.filter(p => src(p) === 'ClinicalTrials.gov' && p.approved !== true)
+    .sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
   const approved = programs.filter(p => p.approved === true);
   const deals = (data.deals ?? []) as Row[];
-  const keyDeals = deals.filter(d => first(d.src) === 'BioCentury');
-  const otherDeals = deals.filter(d => first(d.src) !== 'BioCentury');
+  const keyDeals = deals.filter(d => src(d) === 'BioCentury');
+  const otherDeals = deals.filter(d => src(d) !== 'BioCentury');
   const fins = (data.financings ?? []) as Row[];
   const kols = (data.kols ?? []) as Row[];
   const pubs = (data.publications ?? []) as Row[];
@@ -109,17 +125,46 @@ export default function IntelligenceTab({ company }: { company: Company }) {
     'Which KOLs should we approach, and which are tied to competitors?',
   ];
 
+  const ProgramTable = ({ rows, mechanism }: { rows: Row[]; mechanism?: boolean }) => (
+    <div className="border border-gray-200 rounded-sm overflow-hidden">
+      <div className="max-h-96 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0"><tr className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-400">
+            <th className="text-left font-semibold px-3 py-2">Company</th>
+            <th className="text-left font-semibold px-3 py-2">Program</th>
+            {mechanism ? <th className="text-left font-semibold px-3 py-2">Mechanism</th> : null}
+            <th className="text-left font-semibold px-3 py-2">Phase</th>
+            {!mechanism ? <th className="text-left font-semibold px-3 py-2">Status</th> : null}
+          </tr></thead>
+          <tbody>{rows.map((p, i) => (
+            <tr key={i} className="border-t border-gray-100">
+              <td className="px-3 py-2 font-medium">{first(p.company) || '—'}</td>
+              <td className="px-3 py-2 text-gray-500">{String(p.program)}</td>
+              {mechanism ? <td className="px-3 py-2 text-gray-500">{first(p.moa) || '—'}</td> : null}
+              <td className="px-3 py-2"><Phase s={String(p.stage)} /></td>
+              {!mechanism ? <td className="px-3 py-2 text-xs text-gray-400">{p.status === 'discontinued' ? <span className="text-amber-700 font-medium">discontinued</span> : 'active'}</td> : null}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Seed anchors */}
+      {/* Seed anchors + collect/refresh */}
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
         {[['Disease', s.pk], ['Target', s.target], ['Mechanism', s.mechanism], ['Modality', s.modality], ['Stage', s.maxStage]].filter(([, v]) => v && v !== '-').map(([k, v]) => (
           <span key={k} className="inline-flex items-center gap-1.5 border border-gray-200 bg-gray-50 px-2 py-1 rounded-sm">
             <span className="text-gray-400 font-mono uppercase tracking-wide">{k}</span><span className="font-medium text-[#1A1A1A]">{v}</span>
           </span>
         ))}
-        <button onClick={load} title="Refresh" className="ml-auto text-gray-400 hover:text-hc-teal"><RefreshCw className="w-3.5 h-3.5" /></button>
+        <span className="ml-auto flex items-center gap-2">
+          <button onClick={load} title="Refresh data" className="text-gray-400 hover:text-hc-teal"><RefreshCw className="w-3.5 h-3.5" /></button>
+          <CollectBtn label="Re-collect" />
+        </span>
       </div>
+      {collectMsg && <p className="text-[12px] text-hc-teal -mt-3">{collectMsg}</p>}
 
       {/* Ask the graph */}
       <div className="border border-hc-teal-100 bg-hc-teal-50/40 rounded-sm p-4">
@@ -146,17 +191,23 @@ export default function IntelligenceTab({ company }: { company: Company }) {
         )}
       </div>
 
-      {/* Mechanism peers */}
+      {/* Mechanism peers (highlighted) — when BioCentury/PubMed enrichment exists */}
       {peers.length > 0 && (
         <div>
-          <SectionHead icon={<FlaskConical className="w-4 h-4" />} title="Mechanism peers" count={peers.length} />
-          <div className="border border-gray-200 rounded-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-400">
-                <th className="text-left font-semibold px-3 py-2">Company</th><th className="text-left font-semibold px-3 py-2">Lead program</th><th className="text-left font-semibold px-3 py-2">Mechanism</th><th className="text-left font-semibold px-3 py-2">Stage</th></tr></thead>
-              <tbody>{peers.map((p, i) => <tr key={i} className="border-t border-gray-100"><td className="px-3 py-2 font-medium">{first(p.company) || '—'}</td><td className="px-3 py-2 text-gray-500">{String(p.program)}</td><td className="px-3 py-2 text-gray-500">{first(p.moa) || '—'}</td><td className="px-3 py-2"><Phase s={String(p.stage)} /></td></tr>)}</tbody>
-            </table>
-          </div>
+          <SectionHead icon={<Sparkles className="w-4 h-4" />} title="Mechanism peers" count={`${peers.length} · curated`} />
+          <ProgramTable rows={peers} mechanism />
+        </div>
+      )}
+
+      {/* Competitors — the clinical pipeline (always shown prominently) */}
+      {competitors.length > 0 ? (
+        <div>
+          <SectionHead icon={<FlaskConical className="w-4 h-4" />} title="Competitors — clinical pipeline" count={`${competitors.length} industry programs`} />
+          <ProgramTable rows={competitors} />
+        </div>
+      ) : peers.length === 0 && (
+        <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-sm px-4 py-6 text-center">
+          No competitor programs in the graph for this slice yet. <button onClick={runCollection} className="text-hc-teal underline">Re-collect</button> to (re)build it.
         </div>
       )}
 
@@ -167,7 +218,7 @@ export default function IntelligenceTab({ company }: { company: Company }) {
           <div className="grid md:grid-cols-2 gap-3">
             <div className="border border-gray-200 rounded-sm overflow-x-auto">
               <table className="w-full text-sm"><thead><tr className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-400"><th className="text-left font-semibold px-3 py-2">Company</th><th className="text-left font-semibold px-3 py-2">Counterparty</th><th className="text-left font-semibold px-3 py-2">Value</th><th className="text-left font-semibold px-3 py-2">Yr</th></tr></thead>
-                <tbody>{[...keyDeals, ...otherDeals].slice(0, 20).map((d, i) => <tr key={i} className="border-t border-gray-100"><td className="px-3 py-2 font-medium">{first(d.company) || '—'}</td><td className="px-3 py-2 text-gray-500">{first(d.counterparty) || '—'}{first(d.src) === 'BioCentury' && <span className="ml-1 text-[9px] text-purple-600 font-mono">BC</span>}</td><td className="px-3 py-2 font-mono text-xs">{first(d.value) || '—'}</td><td className="px-3 py-2 font-mono text-xs text-gray-400">{first(d.date).slice(0, 4)}</td></tr>)}</tbody>
+                <tbody>{[...keyDeals, ...otherDeals].slice(0, 20).map((d, i) => <tr key={i} className="border-t border-gray-100"><td className="px-3 py-2 font-medium">{first(d.company) || '—'}</td><td className="px-3 py-2 text-gray-500">{first(d.counterparty) || '—'}{src(d) === 'BioCentury' && <span className="ml-1 text-[9px] text-purple-600 font-mono">BC</span>}</td><td className="px-3 py-2 font-mono text-xs">{first(d.value) || '—'}</td><td className="px-3 py-2 font-mono text-xs text-gray-400">{first(d.date).slice(0, 4)}</td></tr>)}</tbody>
               </table>
             </div>
             <div className="border border-gray-200 rounded-sm overflow-x-auto">
@@ -203,26 +254,15 @@ export default function IntelligenceTab({ company }: { company: Company }) {
         </div>
       )}
 
-      {/* Context: pipeline + approved (collapsible) */}
-      {(pipeline.length > 0 || approved.length > 0) && (
-        <div className="space-y-2">
-          <SectionHead icon={<Network className="w-4 h-4" />} title="Disease-wide context" count={`${pipeline.length} trials · ${approved.length} approved`} />
-          {pipeline.length > 0 && (
-            <details className="border border-gray-200 rounded-sm">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium flex justify-between">Industry clinical pipeline <span className="text-gray-400 font-mono text-xs">{pipeline.length}</span></summary>
-              <div className="overflow-x-auto border-t border-gray-100"><table className="w-full text-sm"><tbody>{pipeline.map((p, i) => <tr key={i} className="border-t border-gray-100 first:border-t-0"><td className="px-3 py-1.5 font-medium">{first(p.company) || '—'}</td><td className="px-3 py-1.5 text-gray-500">{String(p.program)}</td><td className="px-3 py-1.5"><Phase s={String(p.stage)} /></td><td className="px-3 py-1.5 text-xs text-gray-400">{String(p.status)}</td></tr>)}</tbody></table></div>
-            </details>
-          )}
-          {approved.length > 0 && (
-            <details className="border border-gray-200 rounded-sm">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium flex justify-between">Approved / marketed drugs <span className="text-gray-400 font-mono text-xs">{approved.length}</span></summary>
-              <div className="overflow-x-auto border-t border-gray-100"><table className="w-full text-sm"><tbody>{approved.map((p, i) => <tr key={i} className="border-t border-gray-100 first:border-t-0"><td className="px-3 py-1.5 font-medium">{first(p.company) || '—'}</td><td className="px-3 py-1.5 text-gray-500">{String(p.program)}</td></tr>)}</tbody></table></div>
-            </details>
-          )}
-        </div>
+      {/* Approved / marketed (collapsible context) */}
+      {approved.length > 0 && (
+        <details className="border border-gray-200 rounded-sm">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium flex justify-between items-center"><span className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-400" /> Approved / marketed drugs (context)</span><span className="text-gray-400 font-mono text-xs">{approved.length}</span></summary>
+          <div className="overflow-x-auto border-t border-gray-100"><table className="w-full text-sm"><tbody>{approved.map((p, i) => <tr key={i} className="border-t border-gray-100 first:border-t-0"><td className="px-3 py-1.5 font-medium">{first(p.company) || '—'}</td><td className="px-3 py-1.5 text-gray-500">{String(p.program)}</td></tr>)}</tbody></table></div>
+        </details>
       )}
 
-      <p className="text-[11px] text-gray-400 border-t border-gray-100 pt-3">Sources: ClinicalTrials.gov · Open Targets · OpenAlex · SEC EDGAR · BioCentury · PubMed. BioCentury/PubMed items are editorial/literature (trust tier inferred/structured). Answers are generated live over the graph — verify material decisions against primary sources.</p>
+      <p className="text-[11px] text-gray-400 border-t border-gray-100 pt-3">Sources: ClinicalTrials.gov · Open Targets · OpenAlex · SEC EDGAR · BioCentury · PubMed. Answers are generated live over the graph — verify material decisions against primary sources.</p>
     </div>
   );
 }
