@@ -1,6 +1,23 @@
 import { Router } from 'express';
 import sql from 'mssql';
 import { getPool } from './db.js';
+import { enqueueCollection, COLLECT_ON_STAGE } from './graphJobs.js';
+
+// Read a company's current stage (null if it doesn't exist yet).
+async function currentStage(pool: sql.ConnectionPool, id: string): Promise<string | null> {
+  try {
+    const r = await pool.request().input('id', sql.NVarChar(50), id).query('SELECT stage FROM companies WHERE id=@id');
+    return r.recordset[0]?.stage ?? null;
+  } catch { return null; }
+}
+
+// Auto-trigger collection when a company first enters the COLLECT_ON_STAGE deal
+// stage (transition only — not on every save while already in it).
+async function triggerOnStageEntry(pool: sql.ConnectionPool, id: string, prevStage: string | null, newStage: unknown): Promise<void> {
+  if (newStage === COLLECT_ON_STAGE && prevStage !== COLLECT_ON_STAGE) {
+    try { await enqueueCollection(pool, id); } catch (e) { console.error('[stage-trigger] enqueue failed:', e instanceof Error ? e.message : e); }
+  }
+}
 
 // ── Row ⇄ Company mapping ──────────────────────────────────────────────────
 
@@ -186,7 +203,9 @@ companiesRouter.post('/api/companies', async (req, res) => {
   }
   try {
     const pool = await getPool();
+    const prev = await currentStage(pool, req.body?.id);
     await upsertOne(pool, req.body);
+    await triggerOnStageEntry(pool, req.body?.id, prev, req.body?.stage);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -217,7 +236,9 @@ companiesRouter.post('/api/companies/bulk', async (req, res) => {
 companiesRouter.put('/api/companies/:id', async (req, res) => {
   try {
     const pool = await getPool();
+    const prev = await currentStage(pool, req.params.id);
     await upsertOne(pool, { ...req.body, id: req.params.id });
+    await triggerOnStageEntry(pool, req.params.id, prev, req.body?.stage);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

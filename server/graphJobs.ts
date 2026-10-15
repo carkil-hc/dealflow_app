@@ -6,15 +6,24 @@ import { getPool } from './db.js';
 
 export const graphJobsRouter = Router();
 
-// POST /api/companies/:id/collect — queue a collection job for one company.
+// The deal stage whose entry auto-triggers competitive-intelligence collection.
+export const COLLECT_ON_STAGE = 'first_meeting';
+
+// Queue (or re-queue) a collection job for one company — drained by the graph
+// Container Apps Job worker. Shared by the manual endpoint and the stage trigger.
+export async function enqueueCollection(pool: sql.ConnectionPool, companyId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await pool.request().input('id', sql.NVarChar(50), companyId).input('now', sql.NVarChar(30), now)
+    .query(`MERGE graph_jobs AS t USING (SELECT @id AS company_id) AS s ON t.company_id = s.company_id
+      WHEN MATCHED THEN UPDATE SET status='pending', enqueued_at=@now, error=NULL
+      WHEN NOT MATCHED THEN INSERT (company_id, status, enqueued_at, attempts) VALUES (@id, 'pending', @now, 0);`);
+}
+
+// POST /api/companies/:id/collect — manually queue a collection job.
 graphJobsRouter.post('/api/companies/:id/collect', async (req, res) => {
   try {
     const pool = await getPool();
-    const now = new Date().toISOString();
-    await pool.request().input('id', sql.NVarChar(50), req.params.id).input('now', sql.NVarChar(30), now)
-      .query(`MERGE graph_jobs AS t USING (SELECT @id AS company_id) AS s ON t.company_id = s.company_id
-        WHEN MATCHED THEN UPDATE SET status='pending', enqueued_at=@now, error=NULL
-        WHEN NOT MATCHED THEN INSERT (company_id, status, enqueued_at, attempts) VALUES (@id, 'pending', @now, 0);`);
+    await enqueueCollection(pool, req.params.id);
     res.json({ ok: true, queued: req.params.id });
   } catch (err) {
     console.error('[graph/collect]', err);
