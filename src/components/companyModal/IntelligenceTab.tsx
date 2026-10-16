@@ -1,17 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Network, RefreshCw, ExternalLink, FlaskConical, Handshake, GraduationCap, BookOpen, Users } from 'lucide-react';
+import { Loader2, Sparkles, Network, RefreshCw, ExternalLink, FlaskConical, Handshake, GraduationCap, BookOpen, Users, SlidersHorizontal, Save } from 'lucide-react';
 import { Company } from '../../types';
 
-// The Intelligence tab: the company's competitive graph slice shown inline
-// (competitors, mechanism peers, deals, financings, KOLs, publications), plus an
-// "ask the graph" box that reasons live over the whole knowledge graph.
+// The Intelligence tab: an editable "collection instruction" that steers the
+// worker, the company's competitive graph slice shown inline (competitors,
+// mechanism peers, deals, financings, KOLs, publications), and an "ask the graph"
+// box that reasons live over the whole knowledge graph.
 
 interface Row { [k: string]: unknown }
+interface Seed { name: string; pk: string; modality: string; target: string; mechanism: string; maxStage: string }
 interface Intel {
   collected: boolean;
-  seed?: { name: string; pk: string; modality: string; target: string; mechanism: string; maxStage: string };
+  seed?: Seed;
   programs?: Row[]; deals?: Row[]; financings?: Row[]; kols?: Row[]; publications?: Row[];
 }
+interface Profile { diseaseName: string; target: string | null; mechanism: string | null; modality: string; maxStage: string | null; notes: string }
+
+const MODALITIES = ['small molecule', 'biologic/mAb', 'cell therapy', 'gene therapy', 'other'];
 const first = (v: unknown): string => (Array.isArray(v) && v.length ? String(v[0]) : (v == null || v === '-' ? '' : String(v)));
 const src = (p: Row): string => first(p.src);
 const PH: Record<string, { l: string; late: boolean }> = {
@@ -36,6 +41,13 @@ const Phase = ({ s }: { s: string }) => {
   return <span className={`inline-block px-2 py-0.5 rounded-sm text-[11px] font-semibold ${p.late ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{p.l}</span>;
 };
 
+// Module-level (stable identity) so editing never remounts the input / loses focus.
+const inputCls = 'w-full border border-gray-200 rounded-sm px-2.5 py-1.5 text-sm focus:outline-none focus:border-hc-teal';
+const Field = ({ label, val, onChange, ph }: { label: string; val: string; onChange: (v: string) => void; ph?: string }) => (
+  <label className="block"><span className="text-[11px] font-mono uppercase tracking-wide text-gray-400">{label}</span>
+    <input className={inputCls} value={val} placeholder={ph} onChange={e => onChange(e.target.value)} /></label>
+);
+
 export default function IntelligenceTab({ company }: { company: Company }) {
   const [data, setData] = useState<Intel | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,10 +57,20 @@ export default function IntelligenceTab({ company }: { company: Company }) {
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState('');
   const [asking, setAsking] = useState('');
+  // Collection instruction (steering) profile
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileSource, setProfileSource] = useState<'saved' | 'generated' | ''>('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!company.id) return;
     setLoading(true); setError('');
+    // profile (steering instruction) — generated if not yet saved
+    fetch(`/api/companies/${company.id}/collection-profile`).then(r => r.ok ? r.json() : null).then(j => {
+      if (j?.profile) { setProfile(j.profile); setProfileSource(j.source); setProfileOpen(j.source !== 'saved'); }
+    }).catch(() => {});
     try {
       const res = await fetch(`/api/companies/${company.id}/intelligence`);
       if (!res.ok) throw new Error('fetch failed');
@@ -56,15 +78,26 @@ export default function IntelligenceTab({ company }: { company: Company }) {
     } catch { setError('Could not load intelligence data.'); } finally { setLoading(false); }
   }, [company.id]);
 
-  useEffect(() => { setData(null); setAnswer(''); setQ(''); setCollectMsg(''); load(); }, [load]);
+  useEffect(() => { setData(null); setAnswer(''); setQ(''); setCollectMsg(''); setProfile(null); setProfileMsg(''); load(); }, [load]);
+
+  const saveProfile = async () => {
+    if (!profile || !company.id) return;
+    setSavingProfile(true); setProfileMsg('');
+    try {
+      const res = await fetch(`/api/companies/${company.id}/collection-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }) });
+      if (!res.ok) throw new Error();
+      setProfileSource('saved'); setProfileMsg('Saved — used on the next collection.');
+    } catch { setProfileMsg('Could not save — please try again.'); } finally { setSavingProfile(false); }
+  };
 
   const runCollection = async () => {
     if (!company.id) return;
     setQueuing(true); setCollectMsg('');
     try {
+      if (profile) await fetch(`/api/companies/${company.id}/collection-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }) }).catch(() => {});
       const res = await fetch(`/api/companies/${company.id}/collect`, { method: 'POST' });
       if (!res.ok) throw new Error();
-      setCollectMsg('Collection queued — it runs on the next worker cycle (up to ~30 min). Refresh this tab afterwards.');
+      setCollectMsg('Collection queued with your instruction — it runs on the next worker cycle (up to ~30 min). Refresh this tab afterwards.');
     } catch { setCollectMsg('Could not queue collection — please try again.'); } finally { setQueuing(false); }
   };
 
@@ -87,29 +120,64 @@ export default function IntelligenceTab({ company }: { company: Company }) {
     </button>
   );
 
+  // Editable collection instruction — inline JSX (not a component) so inputs keep focus.
+  const profileCard = !profile ? null : (
+    <details open={profileOpen} className="border border-gray-200 rounded-sm" onToggle={e => setProfileOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium flex items-center gap-2 select-none">
+        <SlidersHorizontal className="w-4 h-4 text-hc-teal" /> Collection instruction
+        <span className="text-[11px] font-normal text-gray-400">{profileSource === 'saved' ? 'saved — steers the worker' : 'auto-generated — edit to steer'}</span>
+      </summary>
+      <div className="border-t border-gray-100 p-4 space-y-3">
+        <p className="text-xs text-gray-500">This is what the worker uses to find competitors. Correct the disease or target, and use <b>Notes</b> to narrow scope — e.g. a specific target/technology, or what to exclude. Saved before every collection.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Disease / indication" val={profile.diseaseName} onChange={v => setProfile({ ...profile, diseaseName: v })} ph="e.g. major depressive disorder" />
+          <Field label="Drug target" val={profile.target ?? ''} onChange={v => setProfile({ ...profile, target: v || null })} ph="e.g. FcγRIIB" />
+          <Field label="Mechanism / MoA" val={profile.mechanism ?? ''} onChange={v => setProfile({ ...profile, mechanism: v || null })} ph="e.g. FcγRIIB agonist antibody" />
+          <label className="block"><span className="text-[11px] font-mono uppercase tracking-wide text-gray-400">Modality</span>
+            <select className={inputCls} value={profile.modality} onChange={e => setProfile({ ...profile, modality: e.target.value })}>
+              {MODALITIES.map(m => <option key={m} value={m}>{m}</option>)}
+            </select></label>
+          <Field label="Most advanced stage" val={profile.maxStage ?? ''} onChange={v => setProfile({ ...profile, maxStage: v || null })} ph="e.g. Phase 1" />
+        </div>
+        <label className="block"><span className="text-[11px] font-mono uppercase tracking-wide text-gray-400">Notes — additional steering</span>
+          <textarea className={`${inputCls} resize-y`} rows={3} value={profile.notes}
+            onChange={e => setProfile({ ...profile, notes: e.target.value })}
+            placeholder="Narrow or steer the search: name a specific target/technology, competitor set, patient population, or what to exclude. The worker weights these terms most heavily." /></label>
+        <div className="flex items-center gap-3">
+          <button onClick={saveProfile} disabled={savingProfile || !profile.diseaseName.trim()}
+            className="inline-flex items-center gap-1.5 border border-hc-teal text-hc-teal hover:bg-hc-teal-50 disabled:opacity-40 text-xs font-medium px-3 py-1.5 rounded-sm transition-colors">
+            {savingProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save instruction
+          </button>
+          {profileMsg && <span className="text-[12px] text-hc-teal">{profileMsg}</span>}
+        </div>
+      </div>
+    </details>
+  );
+
   if (loading) return <div className="flex items-center gap-2 text-gray-400 text-sm py-10 justify-center"><Loader2 className="w-4 h-4 animate-spin" /> Loading intelligence…</div>;
   if (error) return <div className="text-sm text-gray-500 py-6">{error} <button onClick={load} className="text-hc-teal underline ml-1">retry</button></div>;
 
   if (data && !data.collected) {
     return (
-      <div className="max-w-xl mx-auto text-center py-12">
-        <Network className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-        <h3 className="font-semibold text-[#1A1A1A] mb-1">No intelligence collected yet</h3>
-        <p className="text-sm text-gray-500 mb-5">Collect this company's competitive landscape — competitors, deals, financings, KOLs and clinical evidence — into the knowledge graph.</p>
-        <CollectBtn label="Collect intelligence" />
-        {collectMsg
-          ? <p className="text-[12px] text-hc-teal mt-3">{collectMsg}</p>
-          : <p className="text-[11px] text-gray-400 mt-3">Collection runs in the background (scheduled worker).</p>}
+      <div className="max-w-2xl mx-auto py-8 space-y-5">
+        <div className="text-center">
+          <Network className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+          <h3 className="font-semibold text-[#1A1A1A] mb-1">No intelligence collected yet</h3>
+          <p className="text-sm text-gray-500 mb-4">Review and steer the collection instruction below, then collect this company's competitive landscape into the knowledge graph.</p>
+          <CollectBtn label="Collect intelligence" />
+          {collectMsg
+            ? <p className="text-[12px] text-hc-teal mt-3">{collectMsg}</p>
+            : <p className="text-[11px] text-gray-400 mt-3">Collection runs in the background (scheduled worker).</p>}
+        </div>
+        {profileCard}
       </div>
     );
   }
   if (!data) return null;
 
   const programs = (data.programs ?? []) as Row[];
-  const peers = programs.filter(p => ['BioCentury', 'PubMed'].includes(src(p)) && p.approved !== true)
-    .sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
-  const competitors = programs.filter(p => src(p) === 'ClinicalTrials.gov' && p.approved !== true)
-    .sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
+  const peers = programs.filter(p => ['BioCentury', 'PubMed'].includes(src(p)) && p.approved !== true).sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
+  const competitors = programs.filter(p => src(p) === 'ClinicalTrials.gov' && p.approved !== true).sort((a, b) => pr(String(b.stage)) - pr(String(a.stage)));
   const approved = programs.filter(p => p.approved === true);
   const deals = (data.deals ?? []) as Row[];
   const keyDeals = deals.filter(d => src(d) === 'BioCentury');
@@ -166,6 +234,9 @@ export default function IntelligenceTab({ company }: { company: Company }) {
       </div>
       {collectMsg && <p className="text-[12px] text-hc-teal -mt-3">{collectMsg}</p>}
 
+      {/* Editable collection instruction */}
+      {profileCard}
+
       {/* Ask the graph */}
       <div className="border border-hc-teal-100 bg-hc-teal-50/40 rounded-sm p-4">
         <div className="flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-hc-teal" /><h3 className="text-sm font-semibold text-[#1A1A1A]">Ask the graph</h3>
@@ -191,23 +262,17 @@ export default function IntelligenceTab({ company }: { company: Company }) {
         )}
       </div>
 
-      {/* Mechanism peers (highlighted) — when BioCentury/PubMed enrichment exists */}
+      {/* Mechanism peers (highlighted) */}
       {peers.length > 0 && (
-        <div>
-          <SectionHead icon={<Sparkles className="w-4 h-4" />} title="Mechanism peers" count={`${peers.length} · curated`} />
-          <ProgramTable rows={peers} mechanism />
-        </div>
+        <div><SectionHead icon={<Sparkles className="w-4 h-4" />} title="Mechanism peers" count={`${peers.length} · curated`} /><ProgramTable rows={peers} mechanism /></div>
       )}
 
-      {/* Competitors — the clinical pipeline (always shown prominently) */}
+      {/* Competitors — clinical pipeline */}
       {competitors.length > 0 ? (
-        <div>
-          <SectionHead icon={<FlaskConical className="w-4 h-4" />} title="Competitors — clinical pipeline" count={`${competitors.length} industry programs`} />
-          <ProgramTable rows={competitors} />
-        </div>
+        <div><SectionHead icon={<FlaskConical className="w-4 h-4" />} title="Competitors — clinical pipeline" count={`${competitors.length} industry programs`} /><ProgramTable rows={competitors} /></div>
       ) : peers.length === 0 && (
         <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-sm px-4 py-6 text-center">
-          No competitor programs in the graph for this slice yet. <button onClick={runCollection} className="text-hc-teal underline">Re-collect</button> to (re)build it.
+          No competitor programs in the graph for this slice yet. Edit the instruction above, then <button onClick={runCollection} className="text-hc-teal underline">Re-collect</button>.
         </div>
       )}
 

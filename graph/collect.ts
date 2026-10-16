@@ -2,10 +2,10 @@
 // idempotent upsert into the graph, then the objective queries. Works for ANY
 // dealflow company. This is what the Container Apps Job worker invokes per job.
 import { openGraph } from './upsert.js';
-import { openSql } from './db.js';
+import { openSql, sql } from './db.js';
 import { Staging, RawRecord } from './staging.js';
 import { getCompanyRow } from './companies.js';
-import { extractSeed } from './seed.js';
+import { extractSeed, Seed, Modality } from './seed.js';
 import { resolveDisease, resolveCompany } from './resolvers.js';
 import { collectCompetitors, classifyProgram, ProgramRecord } from './connectors/competitors.js';
 import { collectAcademics, KolRecord } from './connectors/academics.js';
@@ -30,7 +30,28 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
   try {
     const c = await getCompanyRow(pool, companyId);
     if (!c) throw new Error('company not found: ' + companyId);
-    const seed = await extractSeed(c);
+
+    // A user-saved collection profile (the editable steering instruction) overrides
+    // auto seed-extraction and adds free-text steering used to rank competitors.
+    let seed: Seed;
+    let steering = '';
+    const MODS = ['cell therapy', 'small molecule', 'biologic/mAb', 'gene therapy', 'other'];
+    try {
+      const sr = await pool.request().input('id', sql.NVarChar(100), companyId).query('SELECT steering FROM graph_steering WHERE company_id=@id');
+      if (sr.recordset.length) {
+        const p = JSON.parse(sr.recordset[0].steering);
+        seed = {
+          diseaseName: String(p.diseaseName || c.therapeuticArea || c.name),
+          target: p.target || null, mechanism: p.mechanism || null,
+          modality: (MODS.includes(p.modality) ? p.modality : 'other') as Modality,
+          maxStage: p.maxStage || null,
+        };
+        steering = String(p.notes || '');
+        summary.steered = true;
+      }
+    } catch { /* fall back to auto extraction */ }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(seed as any)) seed = await extractSeed(c);
     const dis = await resolveDisease(seed.diseaseName);
     const pk = dis.canonicalId ?? ('disease:' + slug(seed.diseaseName));
     const cellTherapy = /cell therapy|gene therapy/i.test(seed.modality);
@@ -47,7 +68,7 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
 
     // ── fetch + stage (unless reprocessing) ──
     if (!opts.reprocess) {
-      const comp = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 45, seed: { target: seed.target, mechanism: seed.mechanism, modality: seed.modality } });
+      const comp = await collectCompetitors(seed.diseaseName, { cellTherapy, cap: 45, seed: { target: seed.target, mechanism: seed.mechanism, modality: seed.modality, steering } });
       const programs = [...comp.competitors, ...comp.approved]; // both get nodes; approved tagged + shown separately
       summary.academic_dropped = comp.academicCount;
       summary.approved_drugs = comp.approved.length;

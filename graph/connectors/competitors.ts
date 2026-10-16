@@ -55,7 +55,8 @@ export interface ProgramRecord {
 }
 
 // Seed anchors drive the relevance chain: disease > target > mechanism > modality.
-export interface SeedContext { target?: string | null; mechanism?: string | null; modality?: string | null; }
+// `steering` is the user's free-text instruction — the strongest ranking signal.
+export interface SeedContext { target?: string | null; mechanism?: string | null; modality?: string | null; steering?: string | null; }
 
 async function ctgov(condition: string, intr: string): Promise<ProgramRecord[]> {
   const out: ProgramRecord[] = [];
@@ -116,6 +117,8 @@ const tokens = (s: string | null | undefined) =>
 function chainRelevance(p: ProgramRecord, seed: SeedContext): number {
   const text = `${p.title} ${p.interventions}`.toLowerCase();
   let s = PHASE_RANK[(p.phase ?? []).join('/')] ?? 1;
+  const steerTokens = tokens(seed.steering);
+  if (steerTokens.length) s += steerTokens.filter(t => text.includes(t)).length * 4; // user steering = strongest, per matched term
   if (tokens(seed.target).some(t => text.includes(t))) s += 6;        // same target
   if (tokens(seed.mechanism).some(t => text.includes(t))) s += 4;     // same mechanism/MoA
   if (seed.modality && modalityAligns(p, seed.modality)) s += 1;      // same modality (weakest)
