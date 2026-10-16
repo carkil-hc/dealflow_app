@@ -28,10 +28,18 @@ const CELL_THERAPY_TOPICS = [
   'T10176', // Mesenchymal stem cell research
 ];
 
+// OpenAlex "polite pool": a mailto makes requests far more reliable from
+// datacenter IPs (the anonymous pool rate-limits hard — the cause of worker
+// collection failures). See https://docs.openalex.org/how-to-use-the-api/rate-limits
+const POLITE = '&mailto=dealflow@healthcap.eu';
+
 export async function collectAcademics(diseaseName = "Parkinson's disease", opts: { cellTherapy?: boolean; top?: number } = {}): Promise<KolRecord[]> {
   const top = opts.top ?? 12;
-  const c = await getJson(`https://api.openalex.org/concepts?search=${encodeURIComponent(diseaseName)}&per_page=1`);
-  const cid = String(c.results?.[0]?.id ?? '').split('/').pop();
+  let cid: string | undefined;
+  try {
+    const c = await getJson(`https://api.openalex.org/concepts?search=${encodeURIComponent(diseaseName)}&per_page=1${POLITE}`);
+    cid = String(c.results?.[0]?.id ?? '').split('/').pop();
+  } catch { return []; }
   if (!cid) return [];
   // Cell-therapy companies: anchor on cell-therapy primary topics for precision.
   // Other modalities: concept + leadership ranking only (no cell-topic filter).
@@ -41,7 +49,10 @@ export async function collectAcademics(diseaseName = "Parkinson's disease", opts
   const authors = new Map<string, Agg>();
   let cursor = '*'; let pages = 0;
   do {
-    const d = await getJson(`https://api.openalex.org/works?filter=${filter}&per_page=200&sort=cited_by_count:desc&cursor=${encodeURIComponent(cursor)}`);
+    let d;
+    try {
+      d = await getJson(`https://api.openalex.org/works?filter=${filter}&per_page=200&sort=cited_by_count:desc&cursor=${encodeURIComponent(cursor)}${POLITE}`);
+    } catch { break; } // a failed/throttled page: keep whatever we've gathered so far
     for (const w of (d.results ?? [])) {
       for (const a of (w.authorships ?? [])) {
         const id = a.author?.id; if (!id) continue;

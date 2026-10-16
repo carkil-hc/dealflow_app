@@ -51,7 +51,11 @@ export async function runCollectionForCompany(companyId: string, opts: CollectOp
       const programs = [...comp.competitors, ...comp.approved]; // both get nodes; approved tagged + shown separately
       summary.academic_dropped = comp.academicCount;
       summary.approved_drugs = comp.approved.length;
-      const kols = await collectAcademics(seed.diseaseName, { cellTherapy, top: 12 });
+      // KOL enrichment must never abort the whole collection — competitors,
+      // deals and financings still get saved if OpenAlex is unavailable/throttled.
+      let kols: KolRecord[] = [];
+      try { kols = await collectAcademics(seed.diseaseName, { cellTherapy, top: 12 }); }
+      catch (e) { summary.kolError = e instanceof Error ? e.message : String(e); }
       const recs: RawRecord[] = [
         ...programs.map(p => ({ source: 'clinicaltrials.gov', id: p.nct, recordType: 'trial', slice: pk, url: CT(p.nct), payload: p })),
         ...kols.map(k => ({ source: 'openalex', id: k.openAlexId, recordType: 'author', slice: pk, url: 'https://openalex.org/' + k.openAlexId, payload: k })),
